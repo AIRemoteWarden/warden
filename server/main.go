@@ -24,10 +24,14 @@ import (
 //go:embed web web/assets
 var webFS embed.FS
 
+//go:embed policy.default.json
+var embeddedDefaultPolicy []byte
+
 type Config struct {
 	ControlAddr string
 	RelayAddr   string
 	PublicHost  string
+	PolicyPath  string
 }
 
 type Server struct {
@@ -40,9 +44,10 @@ type Server struct {
 
 func main() {
 	cfg := Config{
-		ControlAddr: envOr("DEBUGIT_CONTROL_ADDR", ":8080"),
-		RelayAddr:   envOr("DEBUGIT_RELAY_ADDR", ":8081"),
-		PublicHost:  envOr("DEBUGIT_PUBLIC_HOST", "localhost"),
+		ControlAddr: envOrAny([]string{"WARDEN_CONTROL_ADDR", "DEBUGIT_CONTROL_ADDR"}, ":8080"),
+		RelayAddr:   envOrAny([]string{"WARDEN_RELAY_ADDR", "DEBUGIT_RELAY_ADDR"}, ":8081"),
+		PublicHost:  envOrAny([]string{"WARDEN_PUBLIC_HOST", "DEBUGIT_PUBLIC_HOST"}, "localhost"),
+		PolicyPath:  envOrAny([]string{"WARDEN_POLICY_PATH", "DEBUGIT_POLICY_PATH"}, ""),
 	}
 
 	assetFS, err := fs.Sub(webFS, "web/assets")
@@ -70,6 +75,7 @@ func main() {
 
 	controlMux := http.NewServeMux()
 	controlMux.Handle("/assets/", srv.staticAssets)
+	controlMux.HandleFunc("/healthz", srv.handleHealthz)
 	controlMux.HandleFunc("/v1/policy/default", srv.handleDefaultPolicy)
 	controlMux.HandleFunc("/v1/sessions", srv.handleCreateSession)
 	controlMux.HandleFunc("/api/session/", srv.handleSessionInfo)
@@ -142,7 +148,7 @@ func (s *Server) handleDefaultPolicy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	raw, err := os.ReadFile("policy.default.json")
+	raw, err := s.loadDefaultPolicy()
 	if err != nil {
 		http.Error(w, "default policy unavailable", http.StatusInternalServerError)
 		return
@@ -152,6 +158,15 @@ func (s *Server) handleDefaultPolicy(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("ETag", fmt.Sprintf(`W/"default-%d"`, len(raw)))
 	_, _ = w.Write(raw)
+}
+
+func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
 func (s *Server) handleSessionInfo(w http.ResponseWriter, r *http.Request) {
@@ -349,8 +364,8 @@ func (s *SessionStore) Create(readonly bool, cfg Config) *Session {
 		HostToken:    hostToken,
 		GuestToken:   guestToken,
 		Readonly:     readonly,
-		GuestURL:     fmt.Sprintf("http://%s%s/session/%s?guest_token=%s", cfg.PublicHost, normalizeControlAddr(cfg.ControlAddr), id, guestToken),
-		HostRelayURL: fmt.Sprintf("ws://%s%s/ws/host?host_token=%s", cfg.PublicHost, normalizeControlAddr(cfg.ControlAddr), hostToken),
+		GuestURL:     fmt.Sprintf("%s/session/%s?guest_token=%s", publicHTTPBase(cfg), id, guestToken),
+		HostRelayURL: fmt.Sprintf("%s/ws/host?host_token=%s", publicWSBase(cfg), hostToken),
 	}
 
 	s.byID[id] = session
@@ -573,6 +588,50 @@ func normalizeRelayAddr(addr string) string {
 
 func randomToken(prefix string) string {
 	return fmt.Sprintf("%s_%d", prefix, time.Now().UnixNano())
+}
+
+func publicHTTPBase(cfg Config) string {
+	host := strings.TrimRight(cfg.PublicHost, "/")
+	if strings.HasPrefix(host, "http://") || strings.HasPrefix(host, "https://") {
+		return host
+	}
+	if strings.Contains(host, ":") {
+		return "http://" + host
+	}
+	return "http://" + host + normalizeControlAddr(cfg.ControlAddr)
+}
+
+func publicWSBase(cfg Config) string {
+	host := strings.TrimRight(cfg.PublicHost, "/")
+	if strings.HasPrefix(host, "ws://") || strings.HasPrefix(host, "wss://") {
+		return host
+	}
+	if strings.HasPrefix(host, "http://") {
+		return "ws://" + strings.TrimPrefix(host, "http://")
+	}
+	if strings.HasPrefix(host, "https://") {
+		return "wss://" + strings.TrimPrefix(host, "https://")
+	}
+	if strings.Contains(host, ":") {
+		return "ws://" + host
+	}
+	return "ws://" + host + normalizeControlAddr(cfg.ControlAddr)
+}
+
+func (s *Server) loadDefaultPolicy() ([]byte, error) {
+	if s.cfg.PolicyPath != "" {
+		return os.ReadFile(s.cfg.PolicyPath)
+	}
+	return embeddedDefaultPolicy, nil
+}
+
+func envOrAny(keys []string, fallback string) string {
+	for _, key := range keys {
+		if value := os.Getenv(key); value != "" {
+			return value
+		}
+	}
+	return fallback
 }
 
 type guestPageView struct {

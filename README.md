@@ -48,6 +48,34 @@ Current work includes:
 - policy distribution from the backend
 - experiments around database-aware masking for `psql`
 
+## Run the server with Docker
+
+The early deployment target is a single Docker container for the backend and a downloadable host client binary.
+
+Build and run the server locally:
+
+```bash
+docker build -t ai-warden-server ./server
+docker run --rm \
+  -p 8080:8080 \
+  -p 8081:8081 \
+  -e WARDEN_PUBLIC_HOST=localhost \
+  ai-warden-server
+```
+
+Or use Compose:
+
+```bash
+docker compose up --build
+```
+
+Notes:
+
+- `8080` serves control APIs, the guest page, static assets, and `/healthz`
+- `8081` serves the relay websocket endpoint
+- default policy is embedded into the server binary
+- you can override the policy file with `WARDEN_POLICY_PATH=/path/to/policy.json`
+
 ## Building in public
 
 We are developing this in public because the hard parts matter:
