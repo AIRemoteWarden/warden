@@ -6,7 +6,9 @@ pub use message::{SessionCreated, TransportEvent};
 
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
-use crate::brand::{offline_guest_url, offline_host_token, offline_session_id, APP_NAME};
+use crate::brand::{
+    offline_guest_token, offline_guest_url, offline_host_token, offline_session_id, APP_NAME,
+};
 use crate::config::AppConfig;
 use crate::errors::{AppError, Result};
 use crate::platform::TerminalSize;
@@ -52,6 +54,7 @@ impl TransportManager {
                 Ok(SessionCreated {
                     session_id: offline_session_id(),
                     host_token: offline_host_token(),
+                    guest_token: offline_guest_token(),
                     guest_url: offline_guest_url(),
                     relay_url: config.relay_base_url.clone(),
                 })

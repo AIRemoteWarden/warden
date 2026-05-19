@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"embed"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,6 +13,7 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"strings"
@@ -137,6 +140,7 @@ func (s *Server) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, CreateSessionResponse{
 		SessionID: session.ID,
 		HostToken: session.HostToken,
+		GuestToken: session.GuestToken,
 		GuestURL:  session.GuestURL,
 		RelayURL:  session.HostRelayURL,
 	})
@@ -365,7 +369,7 @@ func (s *SessionStore) Create(readonly bool, cfg Config) *Session {
 		GuestToken:   guestToken,
 		Readonly:     readonly,
 		GuestURL:     fmt.Sprintf("%s/session/%s?guest_token=%s", publicHTTPBase(cfg), id, guestToken),
-		HostRelayURL: fmt.Sprintf("%s/ws/host?host_token=%s", publicWSBase(cfg), hostToken),
+		HostRelayURL: fmt.Sprintf("%s/ws/host", publicWSBase(cfg)),
 	}
 
 	s.byID[id] = session
@@ -503,10 +507,11 @@ type CreateSessionRequest struct {
 }
 
 type CreateSessionResponse struct {
-	SessionID string `json:"session_id"`
-	HostToken string `json:"host_token"`
-	GuestURL  string `json:"guest_url"`
-	RelayURL  string `json:"relay_url"`
+	SessionID  string `json:"session_id"`
+	HostToken  string `json:"host_token"`
+	GuestToken string `json:"guest_token"`
+	GuestURL   string `json:"guest_url"`
+	RelayURL   string `json:"relay_url"`
 }
 
 type MessageEnvelope struct {
@@ -558,7 +563,7 @@ func writeWSJSON(conn *websocket.Conn, payload any) error {
 
 func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("%s %s", r.Method, r.URL.String())
+		log.Printf("%s %s", r.Method, redactRequestTarget(r.URL))
 		next.ServeHTTP(w, r)
 	})
 }
@@ -587,7 +592,35 @@ func normalizeRelayAddr(addr string) string {
 }
 
 func randomToken(prefix string) string {
-	return fmt.Sprintf("%s_%d", prefix, time.Now().UnixNano())
+	var raw [16]byte
+	if _, err := rand.Read(raw[:]); err != nil {
+		log.Fatalf("token entropy error: %v", err)
+	}
+
+	return fmt.Sprintf("%s_%s", prefix, hex.EncodeToString(raw[:]))
+}
+
+func redactRequestTarget(u *url.URL) string {
+	if u == nil {
+		return "/"
+	}
+
+	if u.RawQuery == "" {
+		return u.Path
+	}
+
+	query := u.Query()
+	for _, key := range []string{"guest_token", "host_token"} {
+		if query.Has(key) {
+			query.Set(key, "REDACTED")
+		}
+	}
+
+	encoded := query.Encode()
+	if encoded == "" {
+		return u.Path
+	}
+	return u.Path + "?" + encoded
 }
 
 func publicHTTPBase(cfg Config) string {

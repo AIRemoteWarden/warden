@@ -31,6 +31,10 @@ pub fn offline_host_token() -> String {
     format!("{}-host-token-dev", app_slug())
 }
 
+pub fn offline_guest_token() -> String {
+    format!("{}-guest-token-dev", app_slug())
+}
+
 pub fn offline_guest_url() -> String {
     format!("https://{}.local/session-dev#local-key", app_slug())
 }

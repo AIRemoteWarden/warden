@@ -2,6 +2,7 @@
 pub struct SessionCreated {
     pub session_id: String,
     pub host_token: String,
+    pub guest_token: String,
     pub guest_url: String,
     pub relay_url: String,
 }
