@@ -48,24 +48,40 @@ Current work includes:
 - policy distribution from the backend
 - experiments around database-aware masking for `psql`
 
-## Run the server with Docker
+## Run the server with Podman
 
-The early deployment target is a single Docker container for the backend and a downloadable host client binary.
+The early deployment target is a single container for the backend and a downloadable host client binary.
+
+Pull and run the published server image:
+
+```bash
+podman pull ghcr.io/ai-remote-warden/warden-server:latest
+podman run --replace -it \
+  --name ai-warden-server \
+  -p 8080:8080 \
+  -e WARDEN_CONTROL_ADDR=:8080 \
+  -e WARDEN_PUBLIC_HOST=http://YOUR_PUBLIC_IP:8080 \
+  ghcr.io/ai-remote-warden/warden-server:latest
+```
+
+Replace `YOUR_PUBLIC_IP` with the public IP address or domain that your users will reach.
 
 Build and run the server locally:
 
 ```bash
-docker build -t ghcr.io/ai-remote-warden/warden-server:local ./server
-docker run --rm \
+podman build --isolation=chroot -t ghcr.io/ai-remote-warden/warden-server:local ./server
+podman run --replace -it \
+  --name ai-warden-server \
   -p 8080:8080 \
-  -e WARDEN_PUBLIC_HOST=localhost \
+  -e WARDEN_CONTROL_ADDR=:8080 \
+  -e WARDEN_PUBLIC_HOST=http://localhost:8080 \
   ghcr.io/ai-remote-warden/warden-server:local
 ```
 
 Or use Compose:
 
 ```bash
-docker compose up --build
+podman compose up --build
 ```
 
 Notes:
