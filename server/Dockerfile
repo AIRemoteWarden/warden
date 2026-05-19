@@ -12,6 +12,6 @@ WORKDIR /app
 
 COPY --from=build /out/warden-server /app/warden-server
 
-EXPOSE 8080 8081
+EXPOSE 8080
 
 ENTRYPOINT ["/app/warden-server"]

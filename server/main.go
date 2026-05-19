@@ -32,7 +32,6 @@ var embeddedDefaultPolicy []byte
 
 type Config struct {
 	ControlAddr string
-	RelayAddr   string
 	PublicHost  string
 	PolicyPath  string
 }
@@ -48,7 +47,6 @@ type Server struct {
 func main() {
 	cfg := Config{
 		ControlAddr: envOrAny([]string{"WARDEN_CONTROL_ADDR", "DEBUGIT_CONTROL_ADDR"}, ":8080"),
-		RelayAddr:   envOrAny([]string{"WARDEN_RELAY_ADDR", "DEBUGIT_RELAY_ADDR"}, ":8081"),
 		PublicHost:  envOrAny([]string{"WARDEN_PUBLIC_HOST", "DEBUGIT_PUBLIC_HOST"}, "localhost"),
 		PolicyPath:  envOrAny([]string{"WARDEN_POLICY_PATH", "DEBUGIT_POLICY_PATH"}, ""),
 	}
@@ -86,30 +84,15 @@ func main() {
 	controlMux.HandleFunc("/ws/host", srv.handleHostWS)
 	controlMux.HandleFunc("/ws/guest", srv.handleGuestWS)
 
-	relayMux := http.NewServeMux()
-	relayMux.HandleFunc("/ws/host", srv.handleHostWS)
-	relayMux.HandleFunc("/ws/guest", srv.handleGuestWS)
-
 	controlServer := &http.Server{
 		Addr:    cfg.ControlAddr,
 		Handler: loggingMiddleware(controlMux),
 	}
-	relayServer := &http.Server{
-		Addr:    cfg.RelayAddr,
-		Handler: loggingMiddleware(relayMux),
-	}
 
 	go func() {
-		log.Printf("control listening on %s", cfg.ControlAddr)
+		log.Printf("server listening on %s", cfg.ControlAddr)
 		if err := controlServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("control server error: %v", err)
-		}
-	}()
-
-	go func() {
-		log.Printf("relay listening on %s", cfg.RelayAddr)
-		if err := relayServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Fatalf("relay server error: %v", err)
 		}
 	}()
 
@@ -121,7 +104,6 @@ func main() {
 	defer cancel()
 
 	_ = controlServer.Shutdown(ctx)
-	_ = relayServer.Shutdown(ctx)
 }
 
 func (s *Server) handleCreateSession(w http.ResponseWriter, r *http.Request) {
@@ -568,27 +550,11 @@ func loggingMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func envOr(key, fallback string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return fallback
-}
-
 func normalizeControlAddr(addr string) string {
 	if strings.HasPrefix(addr, ":") {
 		return addr
 	}
 	return strings.TrimPrefix(addr, "http://")
-}
-
-func normalizeRelayAddr(addr string) string {
-	if strings.HasPrefix(addr, ":") {
-		return addr
-	}
-	addr = strings.TrimPrefix(addr, "ws://")
-	addr = strings.TrimPrefix(addr, "wss://")
-	return addr
 }
 
 func randomToken(prefix string) string {

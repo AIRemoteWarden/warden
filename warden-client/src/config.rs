@@ -172,18 +172,13 @@ impl EndpointConfig {
                 .ok_or(AppError::Message("server url is missing host".to_string()))?;
             let scheme = url.scheme();
             let control_port = url.port().unwrap_or(8080);
-            let relay_port = if url.port().is_some() {
-                control_port + 1
-            } else {
-                8081
-            };
             return Ok(Self {
                 control_base_url: format!("{scheme}://{host}:{control_port}"),
                 relay_base_url: format!(
                     "{}://{}:{}",
                     if scheme == "https" { "wss" } else { "ws" },
                     host,
-                    relay_port
+                    control_port
                 ),
             });
         }
@@ -195,7 +190,7 @@ impl EndpointConfig {
 
         Ok(Self {
             control_base_url: format!("http://{host}:8080"),
-            relay_base_url: format!("ws://{host}:8081"),
+            relay_base_url: format!("ws://{host}:8080"),
         })
     }
 }

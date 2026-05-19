@@ -58,7 +58,6 @@ Build and run the server locally:
 docker build -t ai-warden-server ./server
 docker run --rm \
   -p 8080:8080 \
-  -p 8081:8081 \
   -e WARDEN_PUBLIC_HOST=localhost \
   ai-warden-server
 ```
@@ -71,8 +70,7 @@ docker compose up --build
 
 Notes:
 
-- `8080` serves control APIs, the guest page, static assets, and `/healthz`
-- `8081` serves the relay websocket endpoint
+- `8080` serves control APIs, the guest page, static assets, websocket relay endpoints, and `/healthz`
 - default policy is embedded into the server binary
 - you can override the policy file with `WARDEN_POLICY_PATH=/path/to/policy.json`
 
