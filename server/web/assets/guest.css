@@ -1,0 +1,134 @@
+:root {
+  color-scheme: dark;
+  --bg: #0f1115;
+  --panel: #171a21;
+  --muted: #8e97a7;
+  --fg: #e8ecf3;
+  --accent: #7dd3fc;
+  --border: #283042;
+  --ok: #86efac;
+  --warn: #fca5a5;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: radial-gradient(circle at top, #1a2030 0%, var(--bg) 42%);
+  color: var(--fg);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+}
+
+header,
+footer {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(15, 17, 21, 0.75);
+  backdrop-filter: blur(8px);
+}
+
+footer {
+  border-bottom: none;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.title {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.meta {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.status {
+  color: var(--accent);
+}
+
+main {
+  padding: 18px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 18px;
+}
+
+.terminal-wrap,
+.side {
+  background: rgba(23, 26, 33, 0.88);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+}
+
+.terminal-header,
+.side-header {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+#terminal {
+  min-height: 60vh;
+  height: 100%;
+  padding: 8px;
+  outline: none;
+}
+
+.side {
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+}
+
+.side-section {
+  padding: 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.side-section:last-child {
+  border-bottom: none;
+}
+
+.label {
+  color: var(--muted);
+  display: block;
+  margin-bottom: 8px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+#approval,
+#feedback {
+  color: var(--fg);
+  min-height: 20px;
+}
+
+#approval.warn {
+  color: var(--warn);
+}
+
+#feedback.ok {
+  color: var(--ok);
+}
+
+@media (max-width: 960px) {
+  main {
+    grid-template-columns: 1fr;
+  }
+}

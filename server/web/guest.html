@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ .Title }}</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css">
+  <link rel="stylesheet" href="/assets/guest.css">
+</head>
+<body
+  data-session-id="{{ .SessionID }}"
+  data-guest-token="{{ .GuestToken }}"
+  data-readonly="{{ .Readonly }}"
+  data-mode-label="{{ .ModeLabel }}">
+  <header>
+    <div class="title">AI Warden Guest Terminal</div>
+    <div class="meta">session <span id="session-id">{{ .SessionID }}</span> · status <span class="status" id="status">connecting</span></div>
+  </header>
+  <main>
+    <section class="terminal-wrap">
+      <div class="terminal-header">Terminal</div>
+      <div id="terminal" tabindex="0"></div>
+    </section>
+    <aside class="side">
+      <div class="side-header">Session</div>
+      <div class="side-section">
+        <span class="label">Mode</span>
+        <span id="mode-label">{{ .ModeLabel }}</span>
+      </div>
+      <div class="side-section">
+        <span class="label">Approval</span>
+        <div id="approval">no pending approvals</div>
+      </div>
+      <div class="side-section">
+        <span class="label">Feedback</span>
+        <div id="feedback">waiting for host output</div>
+      </div>
+    </aside>
+  </main>
+  <footer>Type directly in the terminal. This page uses xterm.js for ANSI and cursor handling.</footer>
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js"></script>
+  <script src="/assets/guest.js"></script>
+</body>
+</html>
