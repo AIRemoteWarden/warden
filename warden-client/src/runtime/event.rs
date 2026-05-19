@@ -7,6 +7,7 @@ pub enum RuntimeEvent {
     GuestInput(Vec<u8>),
     ShellOutput(Vec<u8>),
     ShellExited(i32),
+    AiAssessmentFinished(std::result::Result<String, String>),
     GuestJoined,
     GuestLeft,
     Resize(TerminalSize),

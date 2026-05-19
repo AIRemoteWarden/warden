@@ -14,6 +14,7 @@ use crate::policy::{PolicyDecision, PolicyEngine};
 use crate::terminal::{CommandExecutionEvent, TerminalEvent, TerminalManager};
 use crate::transport::{TransportEvent, TransportManager};
 use crate::ui::{ApprovalInputAction, UiRenderer};
+use tokio::sync::oneshot;
 
 pub struct AppRuntime {
     config: AppConfig,
@@ -25,6 +26,7 @@ pub struct AppRuntime {
     platform: PlatformContext,
     ui: UiRenderer,
     state: RuntimeState,
+    ai_assessment_rx: Option<oneshot::Receiver<std::result::Result<String, String>>>,
 }
 
 impl AppRuntime {
@@ -47,6 +49,7 @@ impl AppRuntime {
             ai,
             platform,
             ui,
+            ai_assessment_rx: None,
         }
     }
 
@@ -88,7 +91,24 @@ impl AppRuntime {
     }
 
     async fn next_event(&mut self) -> Result<RuntimeEvent> {
+        let ai_event = async {
+            if let Some(receiver) = self.ai_assessment_rx.as_mut() {
+                match receiver.await {
+                    Ok(result) => RuntimeEvent::AiAssessmentFinished(result),
+                    Err(err) => RuntimeEvent::AiAssessmentFinished(Err(format!(
+                        "ai task failed: {err}"
+                    ))),
+                }
+            } else {
+                std::future::pending::<RuntimeEvent>().await
+            }
+        };
+
         tokio::select! {
+            event = ai_event => {
+                self.ai_assessment_rx = None;
+                Ok(event)
+            },
             event = self.platform.next_event() => Ok(event.into()),
             event = self.terminal.next_event() => Ok(event.into()),
             event = self.transport.next_event() => Ok(event.into()),
@@ -133,6 +153,7 @@ impl AppRuntime {
             RuntimeEvent::Resize(size) => self.apply_resize(size),
             RuntimeEvent::ShellExited(code) => self.shutdown(ShutdownReason::ShellExited(code)).await,
             RuntimeEvent::TransportClosed => self.shutdown(ShutdownReason::TransportClosed).await,
+            RuntimeEvent::AiAssessmentFinished(_) => Ok(()),
             RuntimeEvent::GuestInput(_) => Ok(()),
             RuntimeEvent::GuestLeft => Ok(()),
         }
@@ -165,6 +186,7 @@ impl AppRuntime {
             RuntimeEvent::Resize(size) => self.apply_resize(size),
             RuntimeEvent::ShellExited(code) => self.shutdown(ShutdownReason::ShellExited(code)).await,
             RuntimeEvent::TransportClosed => self.shutdown(ShutdownReason::TransportClosed).await,
+            RuntimeEvent::AiAssessmentFinished(_) => Ok(()),
         }
     }
 
@@ -172,6 +194,10 @@ impl AppRuntime {
         match event {
             RuntimeEvent::HostInput(bytes) => match self.collect_approval_input(&bytes) {
                 ApprovalInputParse::Pending => {
+                    if self.ai_assessment_rx.is_some() {
+                        self.ui.show_ai_request_in_progress();
+                        return Ok(());
+                    }
                     self.ui
                         .render_approval_input(&self.session.approval_input_buffer);
                     Ok(())
@@ -186,6 +212,19 @@ impl AppRuntime {
                 self.transport.send_guest_feedback("waiting for approval").await
             }
             RuntimeEvent::ShellOutput(bytes) => self.forward_shell_output(bytes).await,
+            RuntimeEvent::AiAssessmentFinished(result) => {
+                let can_redact = self
+                    .session
+                    .pending_approval
+                    .as_ref()
+                    .and_then(|pending| pending.redaction_plan.as_ref())
+                    .is_some();
+                match result {
+                    Ok(assessment) => self.ui.show_ai_assessment(&assessment, can_redact),
+                    Err(err) => self.ui.show_ai_error(&err, can_redact),
+                }
+                Ok(())
+            }
             RuntimeEvent::GuestLeft => {
                 self.session.guest_connected = false;
                 Ok(())
@@ -388,12 +427,24 @@ impl AppRuntime {
             .clone()
             .ok_or(AppError::Invariant("missing pending approval context"))?;
 
-        self.ui.show_ai_request_started();
-        let can_redact = pending.redaction_plan.is_some();
-        match self.ai.assess_command(&pending.command, &pending.reason).await {
-            Ok(assessment) => self.ui.show_ai_assessment(&assessment, can_redact),
-            Err(err) => self.ui.show_ai_error(&err.to_string(), can_redact),
+        if self.ai_assessment_rx.is_some() {
+            self.ui.show_ai_request_in_progress();
+            return Ok(());
         }
+
+        self.ui.show_ai_request_started();
+        let ai = self.ai.clone();
+        let command = pending.command;
+        let reason = pending.reason;
+        let (tx, rx) = oneshot::channel();
+        tokio::spawn(async move {
+            let result = ai
+                .assess_command(&command, &reason)
+                .await
+                .map_err(|err| err.to_string());
+            let _ = tx.send(result);
+        });
+        self.ai_assessment_rx = Some(rx);
 
         Ok(())
     }

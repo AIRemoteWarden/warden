@@ -87,6 +87,10 @@ impl UiRenderer {
         self.write_notice("Requesting AI risk assessment...");
     }
 
+    pub fn show_ai_request_in_progress(&mut self) {
+        self.write_notice("AI risk assessment is still in progress...");
+    }
+
     pub fn show_invalid_approval_input(&mut self) {
         self.write_notice("Invalid approval input. Type `yes`, `no`, `redact`, or `ask ai`.");
         self.show_approval_input_prompt();
