@@ -7,7 +7,7 @@ pub use message::{SessionCreated, TransportEvent};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
 use crate::brand::{
-    offline_guest_token, offline_guest_url, offline_host_token, offline_session_id, APP_NAME,
+    offline_guest_url, offline_host_token, offline_session_id, APP_NAME,
 };
 use crate::config::AppConfig;
 use crate::errors::{AppError, Result};
@@ -54,7 +54,6 @@ impl TransportManager {
                 Ok(SessionCreated {
                     session_id: offline_session_id(),
                     host_token: offline_host_token(),
-                    guest_token: offline_guest_token(),
                     guest_url: offline_guest_url(),
                     relay_url: config.relay_base_url.clone(),
                 })
@@ -74,11 +73,10 @@ impl TransportManager {
     }
 
     pub async fn next_event(&mut self) -> TransportEvent {
-        loop {
-            if let Some(event) = self.event_rx.recv().await {
-                return event;
-            }
-        }
+        self.event_rx
+            .recv()
+            .await
+            .unwrap_or(TransportEvent::TransportError)
     }
 
     pub async fn send_terminal_bytes(&mut self, bytes: &[u8]) -> Result<()> {
@@ -95,10 +93,6 @@ impl TransportManager {
                 .send(message)
                 .map_err(|_| AppError::Message("relay writer closed".to_string()))?;
         }
-        Ok(())
-    }
-
-    pub async fn send_control(&mut self, _msg: &str) -> Result<()> {
         Ok(())
     }
 

@@ -53,8 +53,6 @@ impl PlatformContext {
             kind,
             program,
             args: Vec::new(),
-            interactive: true,
-            login: true,
         })
     }
 
@@ -63,7 +61,7 @@ impl PlatformContext {
     }
 
     pub fn current_dir(&self) -> Result<PathBuf> {
-        Ok(std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")))
+        Ok(std::env::current_dir()?)
     }
 
     pub fn terminal_size(&self) -> Result<TerminalSize> {
@@ -72,7 +70,7 @@ impl PlatformContext {
     }
 
     pub fn enter_raw_mode(&mut self) -> Result<()> {
-        terminal::enable_raw_mode().ok();
+        terminal::enable_raw_mode()?;
         if !self.reader_started {
             self.start_event_reader();
             self.reader_started = true;
@@ -82,16 +80,15 @@ impl PlatformContext {
 
     pub fn restore_terminal(&self) -> Result<()> {
         self.stop_flag.store(true, Ordering::SeqCst);
-        terminal::disable_raw_mode().ok();
+        terminal::disable_raw_mode()?;
         Ok(())
     }
 
     pub async fn next_event(&mut self) -> PlatformEvent {
-        loop {
-            if let Some(event) = self.event_rx.recv().await {
-                return event;
-            }
-        }
+        self.event_rx
+            .recv()
+            .await
+            .expect("platform event channel unexpectedly closed")
     }
 
     fn start_event_reader(&mut self) {

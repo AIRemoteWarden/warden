@@ -1,5 +1,4 @@
 use std::path::{Path, PathBuf};
-use std::time::UNIX_EPOCH;
 
 use serde::Deserialize;
 use url::Url;
@@ -14,22 +13,7 @@ pub struct AppConfig {
     pub ai_model: String,
     pub preferred_shell: Option<String>,
     pub readonly: bool,
-    pub approval_enabled: bool,
-    pub policy_snapshot: PolicySnapshot,
-    pub config_path: Option<PathBuf>,
-}
-
-#[derive(Debug, Clone)]
-pub struct PolicySnapshot {
-    pub config: PolicyConfig,
-    pub source: PolicySource,
-    pub version_hint: String,
-}
-
-#[derive(Debug, Clone)]
-pub enum PolicySource {
-    LocalFile { path: PathBuf },
-    BackendDefault { endpoint: String },
+    pub policy: PolicyConfig,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -116,7 +100,7 @@ impl AppConfig {
         let default_ai_base_url = std::env::var("DEBUGIT_AI_BASE_URL")
             .unwrap_or_else(|_| "http://localhost:9001/v1".to_string());
 
-        let policy_snapshot = if let Ok(path) = std::env::var("AI_REMOTE_WARDEN_POLICY") {
+        let policy = if let Ok(path) = std::env::var("AI_REMOTE_WARDEN_POLICY") {
             let path = PathBuf::from(path);
             if !path.exists() {
                 return Err(AppError::Message(format!(
@@ -124,9 +108,9 @@ impl AppConfig {
                     path.display()
                 )));
             }
-            load_local_policy_snapshot(&path)?
+            load_local_policy(&path)?
         } else {
-            fetch_backend_policy_snapshot(&endpoints.control_base_url).await?
+            fetch_backend_policy(&endpoints.control_base_url).await?
         };
 
         Ok(Self {
@@ -137,22 +121,8 @@ impl AppConfig {
                 .unwrap_or_else(|_| "default".to_string()),
             preferred_shell: None,
             readonly: false,
-            approval_enabled: true,
-            policy_snapshot,
-            config_path: local_override_path(),
+            policy,
         })
-    }
-
-    pub async fn reload_policy_snapshot(&mut self) -> Result<()> {
-        let snapshot = match &self.policy_snapshot.source {
-            PolicySource::LocalFile { path } => load_local_policy_snapshot(path)?,
-            PolicySource::BackendDefault { endpoint } => {
-                fetch_policy_snapshot_from_endpoint(endpoint).await?
-            }
-        };
-
-        self.policy_snapshot = snapshot;
-        Ok(())
     }
 
     pub fn normalize_llm_base_url(input: &str) -> Result<String> {
@@ -223,38 +193,18 @@ impl EndpointConfig {
     }
 }
 
-fn local_override_path() -> Option<PathBuf> {
-    std::env::var("AI_REMOTE_WARDEN_POLICY").ok().map(PathBuf::from)
-}
-
-fn load_local_policy_snapshot(path: &Path) -> Result<PolicySnapshot> {
+fn load_local_policy(path: &Path) -> Result<PolicyConfig> {
     let raw = std::fs::read_to_string(path)?;
-    let config: PolicyConfig = serde_json::from_str(&raw)
-        .map_err(|err| AppError::Message(format!("failed to parse policy file: {err}")))?;
-
-    let metadata = std::fs::metadata(path)?;
-    let modified = metadata
-        .modified()
-        .ok()
-        .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
-        .map(|duration| duration.as_secs())
-        .unwrap_or(0);
-
-    Ok(PolicySnapshot {
-        config,
-        source: PolicySource::LocalFile {
-            path: path.to_path_buf(),
-        },
-        version_hint: format!("local:{}:{modified}", path.display()),
-    })
+    serde_json::from_str(&raw)
+        .map_err(|err| AppError::Message(format!("failed to parse policy file: {err}")))
 }
 
-async fn fetch_backend_policy_snapshot(control_base_url: &str) -> Result<PolicySnapshot> {
+async fn fetch_backend_policy(control_base_url: &str) -> Result<PolicyConfig> {
     let endpoint = format!("{}/v1/policy/default", control_base_url.trim_end_matches('/'));
-    fetch_policy_snapshot_from_endpoint(&endpoint).await
+    fetch_policy_from_endpoint(&endpoint).await
 }
 
-async fn fetch_policy_snapshot_from_endpoint(endpoint: &str) -> Result<PolicySnapshot> {
+async fn fetch_policy_from_endpoint(endpoint: &str) -> Result<PolicyConfig> {
     let http = reqwest::Client::builder()
         .connect_timeout(std::time::Duration::from_millis(600))
         .timeout(std::time::Duration::from_secs(5))
@@ -271,23 +221,8 @@ async fn fetch_policy_snapshot_from_endpoint(endpoint: &str) -> Result<PolicySna
         .error_for_status()
         .map_err(|err| AppError::Message(format!("backend policy request failed: {err}")))?;
 
-    let version_hint = response
-        .headers()
-        .get("ETag")
-        .and_then(|value| value.to_str().ok())
-        .map(ToString::to_string)
-        .unwrap_or_else(|| endpoint.to_string());
-
-    let config: PolicyConfig = response
+    response
         .json()
         .await
-        .map_err(|err| AppError::Message(format!("invalid backend policy response: {err}")))?;
-
-    Ok(PolicySnapshot {
-        config,
-        source: PolicySource::BackendDefault {
-            endpoint: endpoint.to_string(),
-        },
-        version_hint,
-    })
+        .map_err(|err| AppError::Message(format!("invalid backend policy response: {err}")))
 }

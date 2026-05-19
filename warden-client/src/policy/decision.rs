@@ -7,8 +7,5 @@ pub enum PolicyDecision {
 
 #[derive(Debug, Clone)]
 pub enum RiskLevel {
-    Low,
-    Medium,
     High,
 }
-

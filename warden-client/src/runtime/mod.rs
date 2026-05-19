@@ -77,7 +77,6 @@ impl AppRuntime {
 
         self.session.cwd = cwd.clone();
         self.session.readonly = self.config.readonly;
-        self.session.shell_spec = Some(shell_spec.clone());
 
         self.terminal.start(shell_spec, cwd, env, size)?;
         self.transport.connect_relay(&self.session).await?;
@@ -128,17 +127,13 @@ impl AppRuntime {
             RuntimeEvent::ShellOutput(bytes) => self.forward_shell_output(bytes).await,
             RuntimeEvent::GuestJoined => {
                 self.session.guest_connected = true;
-                self.ui.show_guest_joined();
                 self.transition(RuntimeState::Interactive)
             }
             RuntimeEvent::CommandReady(command) => self.handle_command_ready(command).await,
             RuntimeEvent::Resize(size) => self.apply_resize(size),
-            RuntimeEvent::ForceDisconnect => {
-                self.shutdown(ShutdownReason::HostDisconnected).await
-            }
             RuntimeEvent::ShellExited(code) => self.shutdown(ShutdownReason::ShellExited(code)).await,
             RuntimeEvent::TransportClosed => self.shutdown(ShutdownReason::TransportClosed).await,
-            RuntimeEvent::GuestInput(_) | RuntimeEvent::ApprovalDecision(_) => Ok(()),
+            RuntimeEvent::GuestInput(_) => Ok(()),
             RuntimeEvent::GuestLeft => Ok(()),
         }
     }
@@ -161,29 +156,20 @@ impl AppRuntime {
             RuntimeEvent::CommandReady(command) => self.handle_command_ready(command).await,
             RuntimeEvent::GuestJoined => {
                 self.session.guest_connected = true;
-                self.ui.show_guest_joined();
                 Ok(())
             }
             RuntimeEvent::GuestLeft => {
                 self.session.guest_connected = false;
-                self.ui.show_guest_left();
                 self.transition(RuntimeState::AwaitingGuest)
             }
             RuntimeEvent::Resize(size) => self.apply_resize(size),
-            RuntimeEvent::ForceDisconnect => {
-                self.shutdown(ShutdownReason::HostDisconnected).await
-            }
             RuntimeEvent::ShellExited(code) => self.shutdown(ShutdownReason::ShellExited(code)).await,
             RuntimeEvent::TransportClosed => self.shutdown(ShutdownReason::TransportClosed).await,
-            RuntimeEvent::ApprovalDecision(_) => Ok(()),
         }
     }
 
     async fn handle_approval_pending(&mut self, event: RuntimeEvent) -> Result<()> {
         match event {
-            RuntimeEvent::ApprovalDecision(decision) => {
-                self.finish_approval(decision).await
-            }
             RuntimeEvent::HostInput(bytes) => match self.collect_approval_input(&bytes) {
                 ApprovalInputParse::Pending => {
                     self.ui
@@ -202,13 +188,9 @@ impl AppRuntime {
             RuntimeEvent::ShellOutput(bytes) => self.forward_shell_output(bytes).await,
             RuntimeEvent::GuestLeft => {
                 self.session.guest_connected = false;
-                self.ui.show_guest_left();
                 Ok(())
             }
             RuntimeEvent::Resize(size) => self.apply_resize(size),
-            RuntimeEvent::ForceDisconnect => {
-                self.shutdown(ShutdownReason::HostDisconnected).await
-            }
             RuntimeEvent::ShellExited(code) => self.shutdown(ShutdownReason::ShellExited(code)).await,
             RuntimeEvent::TransportClosed => self.shutdown(ShutdownReason::TransportClosed).await,
             RuntimeEvent::GuestJoined | RuntimeEvent::CommandReady(_) => Ok(()),
@@ -243,7 +225,7 @@ impl AppRuntime {
                     })?;
                 self.transport.send_guest_feedback("command denied").await
             }
-            PolicyDecision::RequireApproval { reason, risk: _ } => {
+            PolicyDecision::RequireApproval { reason, risk } => {
                 let redaction_plan = self.policy.redaction_plan_for(&command);
                 self.session.approval_pending = true;
                 self.session.pending_approval = Some(PendingApproval {
@@ -256,7 +238,7 @@ impl AppRuntime {
                 self.transport
                     .send_approval_state(&PolicyDecision::RequireApproval {
                         reason,
-                        risk: crate::policy::RiskLevel::High,
+                        risk,
                     })
                     .await?;
                 self.transition(RuntimeState::ApprovalPending)

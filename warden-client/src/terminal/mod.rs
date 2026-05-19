@@ -6,7 +6,6 @@ pub use backend::TerminalBackend;
 pub use hook::{CommandExecutionEvent, CommandHookBridge};
 pub use shell::{ShellKind, ShellSpec};
 
-use std::collections::VecDeque;
 use std::path::PathBuf;
 
 use crate::errors::Result;
@@ -16,7 +15,6 @@ use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 
 pub struct TerminalManager {
     backend: Box<dyn TerminalBackend>,
-    pending_events: VecDeque<TerminalEvent>,
     hook_bridge: CommandHookBridge,
     event_rx: UnboundedReceiver<TerminalEvent>,
 }
@@ -26,7 +24,6 @@ impl TerminalManager {
         let (_tx, rx) = unbounded_channel();
         Self {
             backend: Box::new(backend::PtyBackend::default()),
-            pending_events: VecDeque::new(),
             hook_bridge: CommandHookBridge::new(),
             event_rx: rx,
         }
@@ -46,10 +43,6 @@ impl TerminalManager {
     }
 
     pub async fn next_event(&mut self) -> TerminalEvent {
-        if let Some(event) = self.pending_events.pop_front() {
-            return event;
-        }
-
         tokio::select! {
             event = self.event_rx.recv() => event.unwrap_or(TerminalEvent::Exited(-1)),
             event = self.hook_bridge.next_event() => event,

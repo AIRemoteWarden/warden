@@ -1,5 +1,4 @@
 use crate::platform::TerminalSize;
-use crate::policy::PolicyDecision;
 use crate::terminal::CommandExecutionEvent;
 
 #[derive(Debug)]
@@ -12,14 +11,11 @@ pub enum RuntimeEvent {
     GuestLeft,
     Resize(TerminalSize),
     CommandReady(CommandExecutionEvent),
-    ApprovalDecision(PolicyDecision),
     TransportClosed,
-    ForceDisconnect,
 }
 
 #[derive(Debug)]
 pub enum ShutdownReason {
-    HostDisconnected,
     ShellExited(i32),
     TransportClosed,
 }

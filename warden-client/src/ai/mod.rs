@@ -105,7 +105,6 @@ struct ChatRequestMessage {
 
 #[derive(Deserialize)]
 struct ChatResponseMessage {
-    role: String,
     content: String,
     #[serde(default)]
     reasoning_content: Option<String>,

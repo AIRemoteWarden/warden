@@ -2,7 +2,6 @@ use std::path::PathBuf;
 
 use crate::config::DbMaskRuleKind;
 use crate::policy::{PsqlColumnMask, RedactionPlan};
-use crate::terminal::ShellSpec;
 use crate::transport::SessionCreated;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -321,10 +320,8 @@ fn apply_cell_redaction(value: &str, rule: &DbMaskRuleKind) -> String {
 pub struct SessionContext {
     pub session_id: String,
     pub host_token: String,
-    pub guest_token: String,
     pub guest_url: String,
     pub relay_url: String,
-    pub shell_spec: Option<ShellSpec>,
     pub cwd: PathBuf,
     pub readonly: bool,
     pub guest_connected: bool,
@@ -340,7 +337,6 @@ impl SessionContext {
     pub fn apply_created(&mut self, created: SessionCreated) {
         self.session_id = created.session_id;
         self.host_token = created.host_token;
-        self.guest_token = created.guest_token;
         self.guest_url = created.guest_url;
         self.relay_url = created.relay_url;
     }

@@ -143,31 +143,10 @@ pub enum RedactionPlan {
 }
 
 impl RedactionPlan {
-    pub fn apply_to_line(&self, line: &str) -> String {
-        match self {
-            Self::ShadowSecrets => redact_shadow_like_line(line),
-            Self::PsqlAlignedTable { .. } => line.to_string(),
-        }
-    }
-
     pub fn label(&self) -> &'static str {
         match self {
             Self::ShadowSecrets => "redact password/hash fields",
             Self::PsqlAlignedTable { .. } => "redact configured PostgreSQL columns",
-        }
-    }
-
-    pub fn should_flush_partial(&self, bytes: &[u8]) -> bool {
-        match self {
-            Self::ShadowSecrets => bytes.iter().any(|byte| matches!(*byte, b' ' | b'\t' | 0x1b)),
-            Self::PsqlAlignedTable { .. } => !bytes.iter().any(|byte| *byte == b'|'),
-        }
-    }
-
-    pub fn finishes_on_partial_flush(&self) -> bool {
-        match self {
-            Self::ShadowSecrets => true,
-            Self::PsqlAlignedTable { .. } => false,
         }
     }
 }
@@ -501,19 +480,4 @@ fn tokenize_shell_words(input: &str) -> Vec<String> {
     }
 
     tokens
-}
-
-fn redact_shadow_like_line(line: &str) -> String {
-    let mut fields: Vec<String> = line.split(':').map(ToString::to_string).collect();
-    if fields.len() < 8 {
-        return line.to_string();
-    }
-
-    let secret_index = if fields.len() >= 9 { 1 } else { 2 };
-
-    if let Some(field) = fields.get_mut(secret_index) {
-        *field = "********".to_string();
-    }
-
-    fields.join(":")
 }

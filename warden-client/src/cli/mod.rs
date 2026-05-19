@@ -31,7 +31,7 @@ impl CliBootstrap {
         let platform = PlatformContext::new();
         let terminal = TerminalManager::new();
         let transport = TransportManager::new();
-        let policy = PolicyEngine::new(config.policy_snapshot.config.clone());
+        let policy = PolicyEngine::new(config.policy.clone());
         let ui = UiRenderer::new();
 
         Ok((

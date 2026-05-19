@@ -16,9 +16,7 @@ use crate::terminal::{ShellKind, ShellSpec, TerminalEvent};
 #[derive(Debug, Clone)]
 pub struct CommandExecutionEvent {
     pub command: String,
-    pub shell_kind: ShellKind,
     pub cwd: PathBuf,
-    pub timestamp_unix_ms: u128,
 }
 
 pub struct CommandHookBridge {
@@ -73,7 +71,6 @@ impl CommandHookBridge {
         ];
 
         let (event_tx, event_rx) = unbounded_channel();
-        let shell_kind = shell_spec.kind.clone();
         thread::spawn(move || {
             let reader = BufReader::new(request_file);
             for line in reader.lines() {
@@ -85,12 +82,7 @@ impl CommandHookBridge {
 
                 let event = CommandExecutionEvent {
                     command,
-                    shell_kind: shell_kind.clone(),
                     cwd: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
-                    timestamp_unix_ms: SystemTime::now()
-                        .duration_since(UNIX_EPOCH)
-                        .map(|duration| duration.as_millis())
-                        .unwrap_or(0),
                 };
                 let _ = event_tx.send(TerminalEvent::CommandReady(event));
             }
@@ -103,14 +95,9 @@ impl CommandHookBridge {
     }
 
     pub async fn next_event(&mut self) -> TerminalEvent {
-        loop {
-            if let Some(event_rx) = self.event_rx.as_mut() {
-                if let Some(event) = event_rx.recv().await {
-                    return event;
-                }
-            } else {
-                std::future::pending::<TerminalEvent>().await;
-            }
+        match self.event_rx.as_mut() {
+            Some(event_rx) => event_rx.recv().await.unwrap_or(TerminalEvent::Exited(-1)),
+            None => std::future::pending::<TerminalEvent>().await,
         }
     }
 
@@ -130,7 +117,6 @@ impl CommandHookBridge {
 
         Ok(())
     }
-
 }
 
 impl Drop for CommandHookBridge {

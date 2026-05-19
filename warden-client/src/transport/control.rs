@@ -13,7 +13,6 @@ struct CreateSessionRequest {
 struct CreateSessionResponse {
     session_id: String,
     host_token: String,
-    guest_token: String,
     guest_url: String,
     relay_url: Option<String>,
 }
@@ -43,7 +42,6 @@ pub async fn create_session(
     Ok(SessionCreated {
         session_id: payload.session_id,
         host_token: payload.host_token,
-        guest_token: payload.guest_token,
         guest_url: payload.guest_url,
         relay_url: payload
             .relay_url

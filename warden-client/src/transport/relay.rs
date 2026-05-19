@@ -148,8 +148,6 @@ pub fn approval_message(decision: &PolicyDecision) -> OutboundRelayMessage {
             decision: "require_approval".to_string(),
             reason: Some(reason.clone()),
             risk: Some(match risk {
-                RiskLevel::Low => "low",
-                RiskLevel::Medium => "medium",
                 RiskLevel::High => "high",
             }
             .to_string()),

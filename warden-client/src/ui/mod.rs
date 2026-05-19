@@ -25,12 +25,6 @@ impl UiRenderer {
         println!("Disconnect: exit");
     }
 
-    pub fn show_guest_joined(&mut self) {
-    }
-
-    pub fn show_guest_left(&mut self) {
-    }
-
     pub fn show_approval_prompt(&mut self, command: &str, reason: &str, can_redact: bool) {
         self.write_notice(&format!(
             "Approval required for `{command}`: {reason}"
