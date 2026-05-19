@@ -11,6 +11,7 @@ pub struct CommandArgs {
     pub readonly: bool,
     pub preferred_shell: Option<String>,
     pub server: Option<String>,
+    pub llm: Option<String>,
 }
 
 pub struct CliBootstrap;
@@ -65,6 +66,12 @@ impl CliBootstrap {
                         .ok_or(AppError::InvalidArguments("missing server host".into()))?;
                     parsed.server = Some(server);
                 }
+                "--llm" => {
+                    let llm = args
+                        .next()
+                        .ok_or(AppError::InvalidArguments("missing llm base url".into()))?;
+                    parsed.llm = Some(llm);
+                }
                 "doctor" => return Err(AppError::Unsupported("doctor is not implemented yet")),
                 other => {
                     return Err(AppError::InvalidArguments(format!(
@@ -81,6 +88,9 @@ impl CliBootstrap {
         let mut config = AppConfig::load(args.server.as_deref()).await?;
         config.readonly = args.readonly;
         config.preferred_shell = args.preferred_shell;
+        if let Some(llm) = args.llm {
+            config.ai_base_url = AppConfig::normalize_llm_base_url(&llm)?;
+        }
         Ok(config)
     }
 }

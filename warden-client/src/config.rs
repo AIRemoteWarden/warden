@@ -113,6 +113,8 @@ pub struct RemotePolicySourceConfig {
 impl AppConfig {
     pub async fn load(server: Option<&str>) -> Result<Self> {
         let endpoints = EndpointConfig::from_server_arg(server)?;
+        let default_ai_base_url = std::env::var("DEBUGIT_AI_BASE_URL")
+            .unwrap_or_else(|_| "http://localhost:9001/v1".to_string());
 
         let policy_snapshot = if let Ok(path) = std::env::var("AI_REMOTE_WARDEN_POLICY") {
             let path = PathBuf::from(path);
@@ -130,8 +132,7 @@ impl AppConfig {
         Ok(Self {
             control_base_url: endpoints.control_base_url,
             relay_base_url: endpoints.relay_base_url,
-            ai_base_url: std::env::var("DEBUGIT_AI_BASE_URL")
-                .unwrap_or_else(|_| "http://localhost:9001/v1".to_string()),
+            ai_base_url: Self::normalize_llm_base_url(&default_ai_base_url)?,
             ai_model: std::env::var("DEBUGIT_AI_MODEL")
                 .unwrap_or_else(|_| "default".to_string()),
             preferred_shell: None,
@@ -152,6 +153,33 @@ impl AppConfig {
 
         self.policy_snapshot = snapshot;
         Ok(())
+    }
+
+    pub fn normalize_llm_base_url(input: &str) -> Result<String> {
+        let raw = input.trim();
+        if raw.is_empty() {
+            return Err(AppError::InvalidArguments(
+                "llm base url cannot be empty".to_string(),
+            ));
+        }
+
+        let candidate = if raw.starts_with("http://") || raw.starts_with("https://") {
+            raw.to_string()
+        } else {
+            format!("http://{raw}")
+        };
+
+        let mut url = Url::parse(&candidate)
+            .map_err(|err| AppError::InvalidArguments(format!("invalid llm base url: {err}")))?;
+
+        let normalized_path = match url.path().trim_end_matches('/') {
+            "" => "/v1".to_string(),
+            "/v1" => "/v1".to_string(),
+            path => path.to_string(),
+        };
+        url.set_path(&normalized_path);
+
+        Ok(url.to_string().trim_end_matches('/').to_string())
     }
 }
 

@@ -66,6 +66,12 @@ podman run --replace -it \
 
 Replace `YOUR_PUBLIC_IP` with the public IP address or domain that your users will reach.
 
+Important:
+
+- Warden does not yet provide end-to-end encryption for terminal traffic.
+- If you deploy it on the public internet today, assume the server can see session content and deploy carefully.
+- End-to-end encryption is planned, but it is not in place yet.
+
 Build and run the server locally:
 
 ```bash
@@ -89,6 +95,24 @@ Notes:
 - `8080` serves control APIs, the guest page, static assets, websocket relay endpoints, and `/healthz`
 - default policy is embedded into the server binary
 - you can override the policy file with `WARDEN_POLICY_PATH=/path/to/policy.json`
+
+## Run the client
+
+Build and start the host client:
+
+```bash
+cd warden-client
+cargo run -- start --server YOUR_SERVER_HOST
+```
+
+If you want `ask ai` to use an OpenAI-compatible local model server such as `llama.cpp`, pass `--llm`:
+
+```bash
+cd warden-client
+cargo run -- start --server YOUR_SERVER_HOST --llm localhost:9001
+```
+
+`--llm localhost:9001` is normalized to `http://localhost:9001/v1`.
 
 ## Building in public
 
