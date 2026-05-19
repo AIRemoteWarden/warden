@@ -1,0 +1,62 @@
+{
+  "shell": {
+    "dangerous_commands": [
+      "sudo",
+      "rm",
+      "mkfs",
+      "shutdown",
+      "reboot"
+    ],
+    "approval_commands": [
+      "psql"
+    ]
+  },
+  "files": {
+    "sensitive_rules": [
+      {
+        "path": "/etc/shadow",
+        "kind": "shadow_file",
+        "allow_redaction": true
+      },
+      {
+        "path": "/etc/gshadow",
+        "kind": "shadow_file",
+        "allow_redaction": true
+      },
+      {
+        "path_component": ".ssh",
+        "kind": "ssh_material",
+        "allow_redaction": false
+      },
+      {
+        "basename": ".env",
+        "kind": "env_file",
+        "allow_redaction": false
+      },
+      {
+        "suffix": ".pem",
+        "kind": "pem_key",
+        "allow_redaction": false
+      }
+    ]
+  },
+  "databases": {
+    "column_rules": [
+      {
+        "engine": "postgresql",
+        "table": "users",
+        "column": "ssn",
+        "rule": "full_mask"
+      },
+      {
+        "engine": "postgresql",
+        "table": "users",
+        "column": "credit_card_number",
+        "rule": "last4"
+      }
+    ]
+  },
+  "distribution": {
+    "remote": null
+  }
+}

@@ -1,0 +1,4 @@
+warden-client/target/
+server/go-backend/debugit-go-backend
+.DS_Store
+Thumbs.db
