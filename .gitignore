@@ -1,5 +1,5 @@
 warden-client/target/
-server/go-backend/debugit-go-backend
+server/warden-server
 .DS_Store
 Thumbs.db
 # If you prefer the allow list template instead of the deny list, see community template:

@@ -1,4 +1,4 @@
-module debugit-go-backend
+module warden-server
 
 go 1.22
 
