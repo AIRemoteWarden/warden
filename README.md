@@ -1,6 +1,6 @@
-# Warden
+# AI Warden
 
-Warden helps teams share a real terminal with a customer without asking them to give up control.
+AI Warden is an AI-assisted remote shell product that helps teams share a real terminal with a customer without asking them to give up control.
 
 It is a local-first remote shell product for support, operations, and debugging, with approvals and output protection built into the host side.
 
