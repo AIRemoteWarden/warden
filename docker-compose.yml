@@ -2,7 +2,7 @@ services:
   server:
     build:
       context: ./server
-    image: ai-warden-server:local
+    image: ghcr.io/ai-remote-warden/warden-server:local
     environment:
       WARDEN_CONTROL_ADDR: ":8080"
       WARDEN_PUBLIC_HOST: "localhost"

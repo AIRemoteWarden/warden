@@ -55,11 +55,11 @@ The early deployment target is a single Docker container for the backend and a d
 Build and run the server locally:
 
 ```bash
-docker build -t ai-warden-server ./server
+docker build -t ghcr.io/ai-remote-warden/warden-server:local ./server
 docker run --rm \
   -p 8080:8080 \
   -e WARDEN_PUBLIC_HOST=localhost \
-  ai-warden-server
+  ghcr.io/ai-remote-warden/warden-server:local
 ```
 
 Or use Compose:
