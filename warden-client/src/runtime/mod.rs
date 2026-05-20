@@ -65,7 +65,6 @@ impl AppRuntime {
     }
 
     async fn bootstrap(&mut self) -> Result<()> {
-        self.platform.enter_raw_mode()?;
         self.transition(RuntimeState::CreatingSession)?;
 
         let created = self.transport.create_session(&self.config).await?;
@@ -82,11 +81,11 @@ impl AppRuntime {
         self.session.cwd = cwd.clone();
         self.session.readonly = self.config.readonly;
 
+        self.ui.show_session_started(&self.session.guest_url);
+        self.platform.enter_raw_mode()?;
         self.terminal
             .start(shell_spec, cwd, env, size, &hook_commands)?;
         self.transport.connect_relay(&self.session).await?;
-
-        self.ui.show_session_started(&self.session.guest_url);
         self.transition(RuntimeState::AwaitingGuest)?;
 
         Ok(())
@@ -149,6 +148,7 @@ impl AppRuntime {
             RuntimeEvent::ShellOutput(bytes) => self.forward_shell_output(bytes).await,
             RuntimeEvent::GuestJoined => {
                 self.session.guest_connected = true;
+                self.best_effort_refresh_prompt_for_guest();
                 self.transition(RuntimeState::Interactive)
             }
             RuntimeEvent::CommandReady(command) => self.handle_command_ready(command).await,
@@ -190,6 +190,13 @@ impl AppRuntime {
             RuntimeEvent::TransportClosed => self.shutdown(ShutdownReason::TransportClosed).await,
             RuntimeEvent::AiAssessmentFinished(_) => Ok(()),
         }
+    }
+
+    fn best_effort_refresh_prompt_for_guest(&mut self) {
+        // Best-effort readline redraw for a newly joined guest. This only runs
+        // while the shell is idle in AwaitingGuest, so Ctrl+L is a reasonable
+        // way to surface the current prompt without waiting for manual input.
+        let _ = self.terminal.write_input(&[0x0c]);
     }
 
     async fn handle_approval_pending(&mut self, event: RuntimeEvent) -> Result<()> {

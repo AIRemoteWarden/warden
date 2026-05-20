@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use crate::brand::{approval_prompt, APP_NAME};
+use crate::brand::{approval_prompt, APP_BANNER};
 use crate::runtime::ShutdownReason;
 
 pub struct UiRenderer;
@@ -20,9 +20,15 @@ impl UiRenderer {
     }
 
     pub fn show_session_started(&mut self, guest_url: &str) {
-        println!("{APP_NAME}");
-        println!("Session started: {guest_url}");
-        println!("Disconnect: exit");
+        let mut lines = APP_BANNER
+            .lines()
+            .filter(|line| !line.is_empty())
+            .map(str::to_string)
+            .collect::<Vec<_>>();
+        lines.push(String::new());
+        lines.push(format!("Session started: {guest_url}"));
+        lines.push("Disconnect: exit".to_string());
+        self.write_block(&lines, true);
     }
 
     pub fn show_approval_prompt(&mut self, command: &str, reason: &str, can_redact: bool) {
@@ -42,7 +48,7 @@ impl UiRenderer {
     }
 
     pub fn show_disconnect(&mut self, reason: &ShutdownReason) {
-        self.write_notice(&format!("Session ended: {reason:?}"));
+        self.write_block(&[format!("Session ended: {reason:?}")], true);
     }
 
     pub fn write_terminal_output(&mut self, bytes: &[u8]) {
@@ -116,19 +122,26 @@ impl UiRenderer {
     }
 
     fn write_notice(&mut self, message: &str) {
-        let mut stdout = std::io::stdout().lock();
-        let _ = stdout.write_all(b"\r\n");
-        for line in wrap_notice_lines(message, MAX_NOTICE_WIDTH) {
-            let _ = stdout.write_all(line.as_bytes());
-            let _ = stdout.write_all(b"\r\n");
-        }
-        let _ = stdout.flush();
+        let lines = wrap_notice_lines(message, MAX_NOTICE_WIDTH);
+        self.write_block(&lines, true);
     }
 
     fn show_approval_input_prompt(&mut self) {
         let mut stdout = std::io::stdout().lock();
         let prompt = approval_prompt();
         let _ = stdout.write_all(prompt.as_bytes());
+        let _ = stdout.flush();
+    }
+
+    fn write_block(&mut self, lines: &[String], leading_blank_line: bool) {
+        let mut stdout = std::io::stdout().lock();
+        if leading_blank_line {
+            let _ = stdout.write_all(b"\r\n");
+        }
+        for line in lines {
+            let _ = stdout.write_all(line.as_bytes());
+            let _ = stdout.write_all(b"\r\n");
+        }
         let _ = stdout.flush();
     }
 }

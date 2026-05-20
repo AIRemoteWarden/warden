@@ -45,6 +45,7 @@
     statusEl.textContent = "connected";
     feedbackEl.textContent = "connected to host";
     feedbackEl.className = "ok";
+    term.write("\r\n[ AI WARDEN ] connected to host\r\n\r\n");
     term.focus();
   });
 

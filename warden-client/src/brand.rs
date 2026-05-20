@@ -1,4 +1,9 @@
 pub const APP_NAME: &str = "AI Remote Warden";
+pub const APP_BANNER: &str = r#"
+   ___   ____  _      __            __
+  / _ | /  _/ | | /| / /__ ________/ /__ ___
+ / __ |_/ /   | |/ |/ / _ `/ __/ _  / -_) _ \
+/_/ |_/___/   |__/|__/\_,_/_/  \_,_/\__/_//_/"#;
 
 pub fn app_slug() -> String {
     APP_NAME
