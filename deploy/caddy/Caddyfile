@@ -1,0 +1,4 @@
+{$WARDEN_SITE_HOST:localhost} {
+	tls internal
+	reverse_proxy warden-server:8080
+}

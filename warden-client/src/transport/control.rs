@@ -25,7 +25,7 @@ pub async fn create_session(
     let response = client
         .post(url)
         .json(&CreateSessionRequest {
-            readonly: config.readonly,
+            readonly: config.options.readonly,
         })
         .send()
         .await

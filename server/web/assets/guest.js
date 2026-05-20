@@ -6,7 +6,8 @@
   const approvalEl = document.getElementById("approval");
   const feedbackEl = document.getElementById("feedback");
 
-  const wsURL = "ws://" + window.location.host + "/ws/guest?guest_token=" + encodeURIComponent(guestToken);
+  const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const wsURL = wsProtocol + "//" + window.location.host + "/ws/guest?guest_token=" + encodeURIComponent(guestToken);
   const ws = new WebSocket(wsURL);
 
   const term = new Terminal({

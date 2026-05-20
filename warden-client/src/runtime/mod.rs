@@ -74,12 +74,14 @@ impl AppRuntime {
 
         let cwd = self.platform.current_dir()?;
         let env = self.platform.capture_env();
-        let shell_spec = self.platform.detect_shell(self.config.preferred_shell.clone())?;
+        let shell_spec = self
+            .platform
+            .detect_shell(self.config.options.preferred_shell.clone())?;
         let size = self.platform.terminal_size()?;
         let hook_commands = HookCommandSet::from_policy(&self.config.policy);
 
         self.session.cwd = cwd.clone();
-        self.session.readonly = self.config.readonly;
+        self.session.readonly = self.config.options.readonly;
 
         self.ui.show_session_started(&self.session.guest_url);
         self.platform.enter_raw_mode()?;

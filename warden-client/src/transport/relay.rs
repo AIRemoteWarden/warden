@@ -1,6 +1,10 @@
 use base64::Engine;
 use futures_util::{SinkExt, StreamExt};
+use rustls::client::{ServerCertVerified, ServerCertVerifier};
+use rustls::{Certificate, ClientConfig, Error as RustlsError, ServerName};
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use std::time::SystemTime;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::Message;
@@ -37,6 +41,7 @@ enum InboundRelayMessage {
 pub async fn connect(
     relay_url: &str,
     host_token: &str,
+    insecure: bool,
     event_tx: UnboundedSender<TransportEvent>,
 ) -> Result<UnboundedSender<OutboundRelayMessage>> {
     let mut request = relay_url
@@ -52,7 +57,7 @@ pub async fn connect(
             .map_err(|e| AppError::Message(e.to_string()))?,
         );
 
-    let (ws_stream, _) = tokio_tungstenite::connect_async(request)
+    let (ws_stream, _) = connect_websocket(request, insecure)
         .await
         .map_err(|e| AppError::Message(e.to_string()))?;
 
@@ -117,6 +122,48 @@ pub async fn connect(
     });
 
     Ok(writer_tx)
+}
+
+async fn connect_websocket(
+    request: tokio_tungstenite::tungstenite::handshake::client::Request,
+    insecure: bool,
+) -> std::result::Result<
+    (
+        tokio_tungstenite::WebSocketStream<
+            tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+        >,
+        tokio_tungstenite::tungstenite::handshake::client::Response,
+    ),
+    tokio_tungstenite::tungstenite::Error,
+> {
+    if insecure && request.uri().scheme_str() == Some("wss") {
+        let tls = ClientConfig::builder()
+            .with_safe_defaults()
+            .with_custom_certificate_verifier(Arc::new(NoCertificateVerification))
+            .with_no_client_auth();
+        let connector = tokio_tungstenite::Connector::Rustls(Arc::new(tls));
+        tokio_tungstenite::connect_async_tls_with_config(request, None, false, Some(connector))
+            .await
+    } else {
+        tokio_tungstenite::connect_async(request).await
+    }
+}
+
+#[derive(Debug)]
+struct NoCertificateVerification;
+
+impl ServerCertVerifier for NoCertificateVerification {
+    fn verify_server_cert(
+        &self,
+        _end_entity: &Certificate,
+        _intermediates: &[Certificate],
+        _server_name: &ServerName,
+        _scts: &mut dyn Iterator<Item = &[u8]>,
+        _ocsp_response: &[u8],
+        _now: SystemTime,
+    ) -> std::result::Result<ServerCertVerified, RustlsError> {
+        Ok(ServerCertVerified::assertion())
+    }
 }
 
 pub fn output_message(bytes: &[u8]) -> OutboundRelayMessage {

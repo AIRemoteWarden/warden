@@ -84,15 +84,56 @@ podman run --replace -it \
   ghcr.io/ai-remote-warden/warden-server:local
 ```
 
-Or use Compose:
+## Run Caddy and Warden Server on WSL with Podman
+
+If you are running inside WSL, the most reliable local HTTPS setup we found is to run two Podman containers manually on the same Podman network instead of relying on `podman-compose`.
+
+Create a shared network:
 
 ```bash
-podman compose up --build
+podman network create ai-warden-net
+```
+
+Start `warden-server` on that network with a stable alias:
+
+```bash
+podman run --replace -d \
+  --name warden-server \
+  --network ai-warden-net \
+  --network-alias warden-server \
+  -e WARDEN_PUBLIC_HOST=https://localhost:8443 \
+  ghcr.io/ai-remote-warden/warden-server:latest
+```
+
+Start Caddy on the same network:
+
+```bash
+podman run --replace -d \
+  --name warden-caddy \
+  --network ai-warden-net \
+  -p 8080:80 \
+  -p 8443:443 \
+  -e WARDEN_SITE_HOST=localhost \
+  -v /mnt/c/projects/sidehustle/deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro \
+  -v caddy_data:/data \
+  -v caddy_config:/config \
+  docker.io/library/caddy:2
+```
+
+Verify the HTTPS endpoint:
+
+```bash
+curl -kv https://localhost:8443/v1/policy/default
 ```
 
 Notes:
 
-- `8080` serves control APIs, the guest page, static assets, websocket relay endpoints, and `/healthz`
+- The default Caddy config uses `tls internal`, so it serves a self-signed/internal CA certificate even without a public FQDN.
+- The Caddy internal root certificate is stored in the `caddy_data` volume. If you want browsers or the host client to trust that HTTPS endpoint, you need to export and trust Caddy's root CA certificate manually before connecting to `https://...`.
+- `warden-server` still listens on `8080` inside the container and Caddy reverse-proxies to it on the shared Podman network.
+- Caddy serves:
+  - `http://localhost:8080`
+  - `https://localhost:8443`
 - default policy is embedded into the server binary
 - you can override the policy file with `WARDEN_POLICY_PATH=/path/to/policy.json`
 
@@ -103,6 +144,20 @@ Build and start the host client:
 ```bash
 cd warden-client
 cargo run -- start --server YOUR_SERVER_HOST
+```
+
+If you are running the server behind Caddy with `tls internal`, connect the client to the HTTPS endpoint:
+
+```bash
+cd warden-client
+cargo run -- start --server https://YOUR_SERVER_HOST:8443
+```
+
+For that HTTPS flow to work, the machine running the client must already trust Caddy's internal root CA certificate. For local WSL testing, the simplest path is usually:
+
+```bash
+cd warden-client
+cargo run -- start --server https://localhost:8443 --insecure
 ```
 
 If you want `ask ai` to use an OpenAI-compatible local model server such as `llama.cpp`, pass `--llm`:

@@ -21,14 +21,16 @@ pub struct TransportManager {
     event_tx: UnboundedSender<TransportEvent>,
     relay_writer: Option<UnboundedSender<relay::OutboundRelayMessage>>,
     offline_mode: bool,
+    insecure: bool,
 }
 
 impl TransportManager {
-    pub fn new() -> Self {
+    pub fn new(insecure: bool) -> Self {
         let (event_tx, event_rx) = unbounded_channel();
         let http = reqwest::Client::builder()
             .connect_timeout(std::time::Duration::from_millis(300))
             .timeout(std::time::Duration::from_millis(800))
+            .danger_accept_invalid_certs(insecure)
             .build()
             .unwrap_or_else(|_| reqwest::Client::new());
         Self {
@@ -37,6 +39,7 @@ impl TransportManager {
             event_tx,
             relay_writer: None,
             offline_mode: false,
+            insecure,
         }
     }
 
@@ -67,7 +70,13 @@ impl TransportManager {
             return Ok(());
         }
 
-        let writer = relay::connect(&session.relay_url, &session.host_token, self.event_tx.clone()).await?;
+        let writer = relay::connect(
+            &session.relay_url,
+            &session.host_token,
+            self.insecure,
+            self.event_tx.clone(),
+        )
+        .await?;
         self.relay_writer = Some(writer);
         Ok(())
     }

@@ -5,14 +5,22 @@ use url::Url;
 
 use crate::errors::{AppError, Result};
 
+#[derive(Debug, Clone, Default)]
+pub struct ClientOptions {
+    pub readonly: bool,
+    pub preferred_shell: Option<String>,
+    pub server: Option<String>,
+    pub llm: Option<String>,
+    pub insecure: bool,
+}
+
 #[derive(Debug, Clone)]
 pub struct AppConfig {
+    pub options: ClientOptions,
     pub control_base_url: String,
     pub relay_base_url: String,
     pub ai_base_url: String,
     pub ai_model: String,
-    pub preferred_shell: Option<String>,
-    pub readonly: bool,
     pub policy: PolicyConfig,
 }
 
@@ -97,8 +105,8 @@ pub struct RemotePolicySourceConfig {
 }
 
 impl AppConfig {
-    pub async fn load(server: Option<&str>) -> Result<Self> {
-        let endpoints = EndpointConfig::from_server_arg(server)?;
+    pub async fn load(options: ClientOptions) -> Result<Self> {
+        let endpoints = EndpointConfig::from_server_arg(options.server.as_deref())?;
         let default_ai_base_url = std::env::var("AIWARDEN_AI_BASE_URL")
             .or_else(|_| std::env::var("DEBUGIT_AI_BASE_URL"))
             .unwrap_or_else(|_| "http://localhost:9001/v1".to_string());
@@ -113,18 +121,22 @@ impl AppConfig {
             }
             load_local_policy(&path)?
         } else {
-            fetch_backend_policy(&endpoints.control_base_url).await?
+            fetch_backend_policy(&endpoints.control_base_url, options.insecure).await?
+        };
+
+        let ai_base_url = match options.llm.as_deref() {
+            Some(llm) => Self::normalize_llm_base_url(llm)?,
+            None => Self::normalize_llm_base_url(&default_ai_base_url)?,
         };
 
         Ok(Self {
+            options,
             control_base_url: endpoints.control_base_url,
             relay_base_url: endpoints.relay_base_url,
-            ai_base_url: Self::normalize_llm_base_url(&default_ai_base_url)?,
+            ai_base_url,
             ai_model: std::env::var("AIWARDEN_AI_MODEL")
                 .or_else(|_| std::env::var("DEBUGIT_AI_MODEL"))
                 .unwrap_or_else(|_| "default".to_string()),
-            preferred_shell: None,
-            readonly: false,
             policy,
         })
     }
@@ -137,7 +149,7 @@ impl AppConfig {
             ));
         }
 
-        let candidate = if raw.starts_with("http://") {
+        let candidate = if raw.starts_with("http://") || raw.starts_with("https://") {
             raw.to_string()
         } else {
             format!("http://{raw}")
@@ -166,16 +178,24 @@ struct EndpointConfig {
 impl EndpointConfig {
     fn from_server_arg(server: Option<&str>) -> Result<Self> {
         let server = server.unwrap_or("localhost");
-        if server.starts_with("http://") {
+        if server.starts_with("http://") || server.starts_with("https://") {
             let url = Url::parse(server)
                 .map_err(|err| AppError::Message(format!("invalid server url: {err}")))?;
             let host = url
                 .host_str()
                 .ok_or(AppError::Message("server url is missing host".to_string()))?;
-            let control_port = url.port().unwrap_or(8080);
+            let scheme = url.scheme();
+            let control_port = url
+                .port_or_known_default()
+                .ok_or(AppError::Message("server url is missing port".to_string()))?;
             return Ok(Self {
-                control_base_url: format!("http://{host}:{control_port}"),
-                relay_base_url: format!("ws://{host}:{control_port}"),
+                control_base_url: format!("{scheme}://{host}:{control_port}"),
+                relay_base_url: format!(
+                    "{}://{}:{}",
+                    if scheme == "https" { "wss" } else { "ws" },
+                    host,
+                    control_port
+                ),
             });
         }
 
@@ -197,15 +217,16 @@ fn load_local_policy(path: &Path) -> Result<PolicyConfig> {
         .map_err(|err| AppError::Message(format!("failed to parse policy file: {err}")))
 }
 
-async fn fetch_backend_policy(control_base_url: &str) -> Result<PolicyConfig> {
+async fn fetch_backend_policy(control_base_url: &str, insecure: bool) -> Result<PolicyConfig> {
     let endpoint = format!("{}/v1/policy/default", control_base_url.trim_end_matches('/'));
-    fetch_policy_from_endpoint(&endpoint).await
+    fetch_policy_from_endpoint(&endpoint, insecure).await
 }
 
-async fn fetch_policy_from_endpoint(endpoint: &str) -> Result<PolicyConfig> {
+async fn fetch_policy_from_endpoint(endpoint: &str, insecure: bool) -> Result<PolicyConfig> {
     let http = reqwest::Client::builder()
         .connect_timeout(std::time::Duration::from_millis(600))
         .timeout(std::time::Duration::from_secs(5))
+        .danger_accept_invalid_certs(insecure)
         .build()
         .unwrap_or_else(|_| reqwest::Client::new());
 
