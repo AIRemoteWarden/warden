@@ -3,7 +3,7 @@ mod hook;
 mod shell;
 
 pub use backend::TerminalBackend;
-pub use hook::{CommandExecutionEvent, CommandHookBridge};
+pub use hook::{CommandExecutionEvent, CommandHookBridge, HookCommandSet};
 pub use shell::{ShellKind, ShellSpec};
 
 use std::path::PathBuf;
@@ -35,10 +35,11 @@ impl TerminalManager {
         cwd: PathBuf,
         env: Vec<(String, String)>,
         size: TerminalSize,
+        hook_commands: &HookCommandSet,
     ) -> Result<()> {
         let (event_tx, event_rx) = unbounded_channel();
         self.event_rx = event_rx;
-        self.hook_bridge.install(&mut shell_spec)?;
+        self.hook_bridge.install(&mut shell_spec, hook_commands)?;
         self.backend.start(shell_spec, cwd, env, size, event_tx)
     }
 

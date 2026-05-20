@@ -31,6 +31,8 @@ pub struct ShellPolicyConfig {
     pub dangerous_commands: Vec<String>,
     #[serde(default)]
     pub approval_commands: Vec<String>,
+    #[serde(default)]
+    pub hook_commands: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]

@@ -11,7 +11,7 @@ use crate::config::AppConfig;
 use crate::errors::{AppError, Result};
 use crate::platform::{PlatformContext, PlatformEvent, TerminalSize};
 use crate::policy::{PolicyDecision, PolicyEngine};
-use crate::terminal::{CommandExecutionEvent, TerminalEvent, TerminalManager};
+use crate::terminal::{CommandExecutionEvent, HookCommandSet, TerminalEvent, TerminalManager};
 use crate::transport::{TransportEvent, TransportManager};
 use crate::ui::{ApprovalInputAction, UiRenderer};
 use tokio::sync::oneshot;
@@ -77,11 +77,13 @@ impl AppRuntime {
         let env = self.platform.capture_env();
         let shell_spec = self.platform.detect_shell(self.config.preferred_shell.clone())?;
         let size = self.platform.terminal_size()?;
+        let hook_commands = HookCommandSet::from_policy(&self.config.policy);
 
         self.session.cwd = cwd.clone();
         self.session.readonly = self.config.readonly;
 
-        self.terminal.start(shell_spec, cwd, env, size)?;
+        self.terminal
+            .start(shell_spec, cwd, env, size, &hook_commands)?;
         self.transport.connect_relay(&self.session).await?;
 
         self.ui.show_session_started(&self.session.guest_url);

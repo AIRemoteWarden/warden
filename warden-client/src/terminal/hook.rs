@@ -1,7 +1,10 @@
+use std::collections::BTreeSet;
 use std::fs::{self, File, OpenOptions};
+use std::future::Future;
 use std::io::{BufRead, BufReader, Write};
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
+use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -9,6 +12,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 
 use crate::brand::{denied_message, hook_dir_prefix};
+use crate::config::PolicyConfig;
 use crate::errors::{AppError, Result};
 use crate::policy::PolicyDecision;
 use crate::terminal::{ShellKind, ShellSpec, TerminalEvent};
@@ -19,23 +23,105 @@ pub struct CommandExecutionEvent {
     pub cwd: PathBuf,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct HookCommandSet {
+    commands: Vec<String>,
+}
+
+impl HookCommandSet {
+    pub fn from_policy(policy: &PolicyConfig) -> Self {
+        let mut commands = BTreeSet::new();
+
+        for configured in policy
+            .shell
+            .dangerous_commands
+            .iter()
+            .chain(policy.shell.approval_commands.iter())
+            .chain(policy.shell.hook_commands.iter())
+        {
+            if let Some(name) = normalize_hook_command_name(configured) {
+                commands.insert(name);
+            }
+        }
+
+        Self {
+            commands: commands.into_iter().collect(),
+        }
+    }
+
+    pub fn commands(&self) -> &[String] {
+        &self.commands
+    }
+}
+
 pub struct CommandHookBridge {
+    provider: Box<dyn HookProvider>,
+}
+
+impl CommandHookBridge {
+    pub fn new() -> Self {
+        Self {
+            provider: Box::new(NoopHookProvider),
+        }
+    }
+
+    pub fn install(&mut self, shell_spec: &mut ShellSpec, commands: &HookCommandSet) -> Result<()> {
+        let mut provider = hook_provider_for(shell_spec.kind.clone());
+        provider.install(shell_spec, commands)?;
+        self.provider = provider;
+        Ok(())
+    }
+
+    pub async fn next_event(&mut self) -> TerminalEvent {
+        self.provider.next_event().await
+    }
+
+    pub fn resolve_command(&mut self, decision: PolicyDecision) -> Result<()> {
+        self.provider.resolve_command(decision)
+    }
+}
+
+trait HookProvider: Send {
+    fn install(&mut self, shell_spec: &mut ShellSpec, commands: &HookCommandSet) -> Result<()>;
+    fn next_event<'a>(&'a mut self) -> Pin<Box<dyn Future<Output = TerminalEvent> + Send + 'a>>;
+    fn resolve_command(&mut self, decision: PolicyDecision) -> Result<()>;
+}
+
+struct NoopHookProvider;
+
+impl HookProvider for NoopHookProvider {
+    fn install(&mut self, _shell_spec: &mut ShellSpec, _commands: &HookCommandSet) -> Result<()> {
+        Ok(())
+    }
+
+    fn next_event<'a>(&'a mut self) -> Pin<Box<dyn Future<Output = TerminalEvent> + Send + 'a>> {
+        Box::pin(std::future::pending())
+    }
+
+    fn resolve_command(&mut self, _decision: PolicyDecision) -> Result<()> {
+        Ok(())
+    }
+}
+
+struct BashHookProvider {
     event_rx: Option<UnboundedReceiver<TerminalEvent>>,
     response_writer: Option<Arc<Mutex<File>>>,
     hook_dir: Option<PathBuf>,
 }
 
-impl CommandHookBridge {
-    pub fn new() -> Self {
+impl BashHookProvider {
+    fn new() -> Self {
         Self {
             event_rx: None,
             response_writer: None,
             hook_dir: None,
         }
     }
+}
 
-    pub fn install(&mut self, shell_spec: &mut ShellSpec) -> Result<()> {
-        if !matches!(shell_spec.kind, ShellKind::Bash) {
+impl HookProvider for BashHookProvider {
+    fn install(&mut self, shell_spec: &mut ShellSpec, commands: &HookCommandSet) -> Result<()> {
+        if commands.commands().is_empty() {
             return Ok(());
         }
 
@@ -60,7 +146,7 @@ impl CommandHookBridge {
         let response_file = open_fifo_read_write(&response_pipe)?;
         let response_writer = Arc::new(Mutex::new(response_file));
 
-        let script = render_bash_hook_script(&request_pipe, &response_pipe);
+        let script = render_bash_hook_script(&request_pipe, &response_pipe, commands.commands());
         fs::write(&rcfile, script)?;
 
         shell_spec.args = vec![
@@ -94,14 +180,16 @@ impl CommandHookBridge {
         Ok(())
     }
 
-    pub async fn next_event(&mut self) -> TerminalEvent {
-        match self.event_rx.as_mut() {
-            Some(event_rx) => event_rx.recv().await.unwrap_or(TerminalEvent::Exited(-1)),
-            None => std::future::pending::<TerminalEvent>().await,
-        }
+    fn next_event<'a>(&'a mut self) -> Pin<Box<dyn Future<Output = TerminalEvent> + Send + 'a>> {
+        Box::pin(async move {
+            match self.event_rx.as_mut() {
+                Some(event_rx) => event_rx.recv().await.unwrap_or(TerminalEvent::Exited(-1)),
+                None => std::future::pending::<TerminalEvent>().await,
+            }
+        })
     }
 
-    pub fn resolve_command(&mut self, decision: PolicyDecision) -> Result<()> {
+    fn resolve_command(&mut self, decision: PolicyDecision) -> Result<()> {
         let verdict = match decision {
             PolicyDecision::Allow => "allow\n",
             PolicyDecision::Deny { .. } | PolicyDecision::RequireApproval { .. } => "deny\n",
@@ -119,13 +207,35 @@ impl CommandHookBridge {
     }
 }
 
-impl Drop for CommandHookBridge {
+impl Drop for BashHookProvider {
     fn drop(&mut self) {
         self.response_writer.take();
         if let Some(hook_dir) = self.hook_dir.take() {
             let _ = fs::remove_dir_all(hook_dir);
         }
     }
+}
+
+fn hook_provider_for(shell_kind: ShellKind) -> Box<dyn HookProvider> {
+    match shell_kind {
+        ShellKind::Bash => Box::new(BashHookProvider::new()),
+        ShellKind::Zsh | ShellKind::PowerShell => Box::new(NoopHookProvider),
+    }
+}
+
+fn normalize_hook_command_name(raw: &str) -> Option<String> {
+    let command = raw.split_whitespace().next()?.trim();
+    if is_safe_hook_command_name(command) {
+        Some(command.to_string())
+    } else {
+        None
+    }
+}
+
+fn is_safe_hook_command_name(name: &str) -> bool {
+    let mut chars = name.chars();
+    matches!(chars.next(), Some(first) if first.is_ascii_alphabetic() || first == '_')
+        && chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
 }
 
 fn create_fifo(path: &Path) -> Result<()> {
@@ -149,8 +259,23 @@ fn open_fifo_read_write(path: &Path) -> Result<File> {
         .map_err(AppError::Io)
 }
 
-fn render_bash_hook_script(request_pipe: &Path, response_pipe: &Path) -> String {
+fn render_bash_hook_script(
+    request_pipe: &Path,
+    response_pipe: &Path,
+    commands: &[String],
+) -> String {
     let denied_message = denied_message();
+    let unalias_line = if commands.is_empty() {
+        String::new()
+    } else {
+        format!("unalias {} 2>/dev/null || true", commands.join(" "))
+    };
+    let wrapper_lines = commands
+        .iter()
+        .map(|command| format!("{command}() {{ __warden_gate {command} \"$@\"; }}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+
     format!(
         r#"
 if [ -f /etc/bash.bashrc ]; then
@@ -184,40 +309,19 @@ __warden_gate() {{
   IFS= read -r decision <&8
   if [ "$decision" = "allow" ]; then
     command "$original_cmd" "$@"
-  elif [ "$decision" = "handled" ]; then
-    return 0
   else
     printf '{denied_message}\n' >&2
     return 126
   fi
 }}
 
-unalias sudo rm cat grep head tail sed awk less vim nano cp scp base64 python python3 perl psql mkfs shutdown reboot 2>/dev/null || true
-
-sudo() {{ __warden_gate sudo "$@"; }}
-rm() {{ __warden_gate rm "$@"; }}
-cat() {{ __warden_gate cat "$@"; }}
-grep() {{ __warden_gate grep "$@"; }}
-head() {{ __warden_gate head "$@"; }}
-tail() {{ __warden_gate tail "$@"; }}
-sed() {{ __warden_gate sed "$@"; }}
-awk() {{ __warden_gate awk "$@"; }}
-less() {{ __warden_gate less "$@"; }}
-vim() {{ __warden_gate vim "$@"; }}
-nano() {{ __warden_gate nano "$@"; }}
-cp() {{ __warden_gate cp "$@"; }}
-scp() {{ __warden_gate scp "$@"; }}
-base64() {{ __warden_gate base64 "$@"; }}
-python() {{ __warden_gate python "$@"; }}
-python3() {{ __warden_gate python3 "$@"; }}
-perl() {{ __warden_gate perl "$@"; }}
-psql() {{ __warden_gate psql "$@"; }}
-mkfs() {{ __warden_gate mkfs "$@"; }}
-shutdown() {{ __warden_gate shutdown "$@"; }}
-reboot() {{ __warden_gate reboot "$@"; }}
+{unalias_line}
+{wrapper_lines}
 "#,
         denied_message = denied_message.replace('\'', r"'\''"),
         request_pipe = request_pipe.display(),
         response_pipe = response_pipe.display(),
+        unalias_line = unalias_line,
+        wrapper_lines = wrapper_lines,
     )
 }

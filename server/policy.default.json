@@ -9,6 +9,24 @@
     ],
     "approval_commands": [
       "psql"
+    ],
+    "hook_commands": [
+      "awk",
+      "base64",
+      "cat",
+      "cp",
+      "grep",
+      "head",
+      "less",
+      "nano",
+      "perl",
+      "psql",
+      "python",
+      "python3",
+      "scp",
+      "sed",
+      "tail",
+      "vim"
     ]
   },
   "files": {
