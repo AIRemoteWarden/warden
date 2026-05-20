@@ -137,7 +137,7 @@ impl AppConfig {
             ));
         }
 
-        let candidate = if raw.starts_with("http://") || raw.starts_with("https://") {
+        let candidate = if raw.starts_with("http://") {
             raw.to_string()
         } else {
             format!("http://{raw}")
@@ -166,22 +166,16 @@ struct EndpointConfig {
 impl EndpointConfig {
     fn from_server_arg(server: Option<&str>) -> Result<Self> {
         let server = server.unwrap_or("localhost");
-        if server.starts_with("http://") || server.starts_with("https://") {
+        if server.starts_with("http://") {
             let url = Url::parse(server)
                 .map_err(|err| AppError::Message(format!("invalid server url: {err}")))?;
             let host = url
                 .host_str()
                 .ok_or(AppError::Message("server url is missing host".to_string()))?;
-            let scheme = url.scheme();
             let control_port = url.port().unwrap_or(8080);
             return Ok(Self {
-                control_base_url: format!("{scheme}://{host}:{control_port}"),
-                relay_base_url: format!(
-                    "{}://{}:{}",
-                    if scheme == "https" { "wss" } else { "ws" },
-                    host,
-                    control_port
-                ),
+                control_base_url: format!("http://{host}:{control_port}"),
+                relay_base_url: format!("ws://{host}:{control_port}"),
             });
         }
 

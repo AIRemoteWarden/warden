@@ -591,7 +591,7 @@ func redactRequestTarget(u *url.URL) string {
 
 func publicHTTPBase(cfg Config) string {
 	host := strings.TrimRight(cfg.PublicHost, "/")
-	if strings.HasPrefix(host, "http://") || strings.HasPrefix(host, "https://") {
+	if strings.HasPrefix(host, "http://") {
 		return host
 	}
 	if strings.Contains(host, ":") {
@@ -602,14 +602,11 @@ func publicHTTPBase(cfg Config) string {
 
 func publicWSBase(cfg Config) string {
 	host := strings.TrimRight(cfg.PublicHost, "/")
-	if strings.HasPrefix(host, "ws://") || strings.HasPrefix(host, "wss://") {
+	if strings.HasPrefix(host, "ws://") {
 		return host
 	}
 	if strings.HasPrefix(host, "http://") {
 		return "ws://" + strings.TrimPrefix(host, "http://")
-	}
-	if strings.HasPrefix(host, "https://") {
-		return "wss://" + strings.TrimPrefix(host, "https://")
 	}
 	if strings.Contains(host, ":") {
 		return "ws://" + host

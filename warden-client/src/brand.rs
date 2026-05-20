@@ -32,7 +32,7 @@ pub fn offline_host_token() -> String {
 }
 
 pub fn offline_guest_url() -> String {
-    format!("https://{}.local/session-dev#local-key", app_slug())
+    format!("http://{}.local/session-dev#local-key", app_slug())
 }
 
 pub fn hook_dir_prefix() -> String {
