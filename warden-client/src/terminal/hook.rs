@@ -285,11 +285,11 @@ if [ -f "$HOME/.bashrc" ]; then
   . "$HOME/.bashrc"
 fi
 
-export DEBUGIT_REQUEST_PIPE="{request_pipe}"
-export DEBUGIT_RESPONSE_PIPE="{response_pipe}"
+export AIWARDEN_REQUEST_PIPE="{request_pipe}"
+export AIWARDEN_RESPONSE_PIPE="{response_pipe}"
 
-exec 9<>"$DEBUGIT_REQUEST_PIPE"
-exec 8<>"$DEBUGIT_RESPONSE_PIPE"
+exec 9<>"$AIWARDEN_REQUEST_PIPE"
+exec 8<>"$AIWARDEN_RESPONSE_PIPE"
 
 __warden_render_command() {{
   local rendered="$1"

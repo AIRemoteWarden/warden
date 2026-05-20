@@ -99,7 +99,8 @@ pub struct RemotePolicySourceConfig {
 impl AppConfig {
     pub async fn load(server: Option<&str>) -> Result<Self> {
         let endpoints = EndpointConfig::from_server_arg(server)?;
-        let default_ai_base_url = std::env::var("DEBUGIT_AI_BASE_URL")
+        let default_ai_base_url = std::env::var("AIWARDEN_AI_BASE_URL")
+            .or_else(|_| std::env::var("DEBUGIT_AI_BASE_URL"))
             .unwrap_or_else(|_| "http://localhost:9001/v1".to_string());
 
         let policy = if let Ok(path) = std::env::var("AI_REMOTE_WARDEN_POLICY") {
@@ -119,7 +120,8 @@ impl AppConfig {
             control_base_url: endpoints.control_base_url,
             relay_base_url: endpoints.relay_base_url,
             ai_base_url: Self::normalize_llm_base_url(&default_ai_base_url)?,
-            ai_model: std::env::var("DEBUGIT_AI_MODEL")
+            ai_model: std::env::var("AIWARDEN_AI_MODEL")
+                .or_else(|_| std::env::var("DEBUGIT_AI_MODEL"))
                 .unwrap_or_else(|_| "default".to_string()),
             preferred_shell: None,
             readonly: false,

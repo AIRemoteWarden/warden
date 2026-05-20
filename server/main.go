@@ -46,9 +46,9 @@ type Server struct {
 
 func main() {
 	cfg := Config{
-		ControlAddr: envOrAny([]string{"WARDEN_CONTROL_ADDR", "DEBUGIT_CONTROL_ADDR"}, ":8080"),
-		PublicHost:  envOrAny([]string{"WARDEN_PUBLIC_HOST", "DEBUGIT_PUBLIC_HOST"}, "localhost"),
-		PolicyPath:  envOrAny([]string{"WARDEN_POLICY_PATH", "DEBUGIT_POLICY_PATH"}, ""),
+        ControlAddr: envOrAny([]string{"WARDEN_CONTROL_ADDR", "AIWARDEN_CONTROL_ADDR", "DEBUGIT_CONTROL_ADDR"}, ":8080"),
+        PublicHost:  envOrAny([]string{"WARDEN_PUBLIC_HOST", "AIWARDEN_PUBLIC_HOST", "DEBUGIT_PUBLIC_HOST"}, "localhost"),
+        PolicyPath:  envOrAny([]string{"WARDEN_POLICY_PATH", "AIWARDEN_POLICY_PATH", "DEBUGIT_POLICY_PATH"}, ""),
 	}
 
 	assetFS, err := fs.Sub(webFS, "web/assets")
