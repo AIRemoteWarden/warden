@@ -36,9 +36,9 @@ impl UiRenderer {
             "Approval required for `{command}`: {reason}"
         ));
         if can_redact {
-            self.write_notice("Type `yes`, `no`, `redact`, or `ask ai`, then press Enter.");
+            self.write_notice(&approval_choices_text(true));
         } else {
-            self.write_notice("Type `yes`, `no`, or `ask ai`, then press Enter.");
+            self.write_notice(&approval_choices_text(false));
         }
         self.show_approval_input_prompt();
     }
@@ -63,7 +63,7 @@ impl UiRenderer {
             "y" | "yes" => Some(ApprovalInputAction::Approve),
             "n" | "no" => Some(ApprovalInputAction::Deny),
             "redact" | "mask" | "r" => Some(ApprovalInputAction::Redact),
-            "ask ai" | "ask-ai" | "ai" => Some(ApprovalInputAction::AskAi),
+            "ask ai" | "ask-ai" | "a" => Some(ApprovalInputAction::AskAi),
             _ => None,
         }
     }
@@ -72,9 +72,9 @@ impl UiRenderer {
         self.write_notice("AI risk assessment:");
         self.write_notice(assessment);
         if can_redact {
-            self.write_notice("Review the assessment, then type `yes`, `no`, or `redact`.");
+            self.write_notice("Review the assessment, then choose `yes (y)`, `no (n)`, or `redact (r)`.");
         } else {
-            self.write_notice("Review the assessment, then type `yes` or `no`.");
+            self.write_notice("Review the assessment, then choose `yes (y)` or `no (n)`.");
         }
         self.show_approval_input_prompt();
     }
@@ -82,9 +82,9 @@ impl UiRenderer {
     pub fn show_ai_error(&mut self, error: &str, can_redact: bool) {
         self.write_notice(&format!("AI assessment failed: {error}"));
         if can_redact {
-            self.write_notice("Type `yes`, `no`, `redact`, or `ask ai`, then press Enter.");
+            self.write_notice(&approval_choices_text(true));
         } else {
-            self.write_notice("Type `yes`, `no`, or `ask ai`, then press Enter.");
+            self.write_notice(&approval_choices_text(false));
         }
         self.show_approval_input_prompt();
     }
@@ -98,13 +98,13 @@ impl UiRenderer {
     }
 
     pub fn show_invalid_approval_input(&mut self) {
-        self.write_notice("Invalid approval input. Type `yes`, `no`, `redact`, or `ask ai`.");
+        self.write_notice("Invalid approval input. Choose `yes (y)`, `no (n)`, `redact (r)`, or `ask ai (a)`.");
         self.show_approval_input_prompt();
     }
 
     pub fn show_redaction_unavailable(&mut self) {
         self.write_notice("Redacted output is not available for this command.");
-        self.write_notice("Type `yes`, `no`, or `ask ai`, then press Enter.");
+        self.write_notice(&approval_choices_text(false));
         self.show_approval_input_prompt();
     }
 
@@ -143,6 +143,14 @@ impl UiRenderer {
             let _ = stdout.write_all(b"\r\n");
         }
         let _ = stdout.flush();
+    }
+}
+
+fn approval_choices_text(can_redact: bool) -> String {
+    if can_redact {
+        "Type `yes (y)`, `no (n)`, `redact (r)`, or `ask ai (a)`, then press Enter.".to_string()
+    } else {
+        "Type `yes (y)`, `no (n)`, or `ask ai (a)`, then press Enter.".to_string()
     }
 }
 
