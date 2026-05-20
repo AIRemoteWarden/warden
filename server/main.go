@@ -80,6 +80,7 @@ func main() {
 	controlMux.HandleFunc("/v1/policy/default", srv.handleDefaultPolicy)
 	controlMux.HandleFunc("/v1/sessions", srv.handleCreateSession)
 	controlMux.HandleFunc("/api/session/", srv.handleSessionInfo)
+	controlMux.HandleFunc("/s/", srv.handleShortSessionPage)
 	controlMux.HandleFunc("/session/", srv.handleSessionPage)
 	controlMux.HandleFunc("/ws/host", srv.handleHostWS)
 	controlMux.HandleFunc("/ws/guest", srv.handleGuestWS)
@@ -122,7 +123,6 @@ func (s *Server) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, CreateSessionResponse{
 		SessionID: session.ID,
 		HostToken: session.HostToken,
-		GuestToken: session.GuestToken,
 		GuestURL:  session.GuestURL,
 		RelayURL:  session.HostRelayURL,
 	})
@@ -185,21 +185,18 @@ func (s *Server) handleSessionPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	view := guestPageView{
-		Title:      "AI Warden Guest Terminal",
-		SessionID:  session.ID,
-		GuestToken: session.GuestToken,
-		Readonly:   session.Readonly,
-		ModeLabel: map[bool]string{
-			true:  "read-only",
-			false: "interactive",
-		}[session.Readonly],
+	s.renderGuestPage(w, session)
+}
+
+func (s *Server) handleShortSessionPage(w http.ResponseWriter, r *http.Request) {
+	inviteID := strings.TrimPrefix(r.URL.Path, "/s/")
+	session, ok := s.sessions.GetByInviteID(inviteID)
+	if !ok {
+		http.NotFound(w, r)
+		return
 	}
 
-	if err := s.guestPage.Execute(w, view); err != nil {
-		http.Error(w, "failed to render guest page", http.StatusInternalServerError)
-	}
+	s.renderGuestPage(w, session)
 }
 
 func (s *Server) handleHostWS(w http.ResponseWriter, r *http.Request) {
@@ -328,6 +325,7 @@ type SessionStore struct {
 	byID         map[string]*Session
 	byHostToken  map[string]*Session
 	byGuestToken map[string]*Session
+	byInviteID   map[string]*Session
 }
 
 func NewSessionStore() *SessionStore {
@@ -335,6 +333,7 @@ func NewSessionStore() *SessionStore {
 		byID:         make(map[string]*Session),
 		byHostToken:  make(map[string]*Session),
 		byGuestToken: make(map[string]*Session),
+		byInviteID:   make(map[string]*Session),
 	}
 }
 
@@ -345,18 +344,21 @@ func (s *SessionStore) Create(readonly bool, cfg Config) *Session {
 	id := randomToken("sess")
 	hostToken := randomToken("host")
 	guestToken := randomToken("guest")
+	inviteID := randomInviteID(10)
 	session := &Session{
 		ID:           id,
 		HostToken:    hostToken,
 		GuestToken:   guestToken,
+		InviteID:     inviteID,
 		Readonly:     readonly,
-		GuestURL:     fmt.Sprintf("%s/session/%s?guest_token=%s", publicHTTPBase(cfg), id, guestToken),
+		GuestURL:     fmt.Sprintf("%s/s/%s", publicHTTPBase(cfg), inviteID),
 		HostRelayURL: fmt.Sprintf("%s/ws/host", publicWSBase(cfg)),
 	}
 
 	s.byID[id] = session
 	s.byHostToken[hostToken] = session
 	s.byGuestToken[guestToken] = session
+	s.byInviteID[inviteID] = session
 	return session
 }
 
@@ -378,6 +380,13 @@ func (s *SessionStore) GetByGuestToken(token string) (*Session, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	session, ok := s.byGuestToken[token]
+	return session, ok
+}
+
+func (s *SessionStore) GetByInviteID(inviteID string) (*Session, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	session, ok := s.byInviteID[inviteID]
 	return session, ok
 }
 
@@ -460,6 +469,7 @@ func (s *SessionStore) expireSessionLocked(session *Session) {
 	delete(s.byID, session.ID)
 	delete(s.byHostToken, session.HostToken)
 	delete(s.byGuestToken, session.GuestToken)
+	delete(s.byInviteID, session.InviteID)
 
 	if session.GuestConn != nil {
 		_ = session.GuestConn.WriteMessage(websocket.TextMessage, []byte(`{"type":"close"}`))
@@ -477,6 +487,7 @@ type Session struct {
 	ID           string
 	HostToken    string
 	GuestToken   string
+	InviteID     string
 	Readonly     bool
 	GuestURL     string
 	HostRelayURL string
@@ -491,7 +502,6 @@ type CreateSessionRequest struct {
 type CreateSessionResponse struct {
 	SessionID  string `json:"session_id"`
 	HostToken  string `json:"host_token"`
-	GuestToken string `json:"guest_token"`
 	GuestURL   string `json:"guest_url"`
 	RelayURL   string `json:"relay_url"`
 }
@@ -566,9 +576,32 @@ func randomToken(prefix string) string {
 	return fmt.Sprintf("%s_%s", prefix, hex.EncodeToString(raw[:]))
 }
 
+func randomInviteID(length int) string {
+	const alphabet = "23456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+	if length <= 0 {
+		length = 10
+	}
+
+	bytes := make([]byte, length)
+	if _, err := rand.Read(bytes); err != nil {
+		log.Fatalf("invite entropy error: %v", err)
+	}
+
+	var out strings.Builder
+	out.Grow(length)
+	for _, b := range bytes {
+		out.WriteByte(alphabet[int(b)%len(alphabet)])
+	}
+	return out.String()
+}
+
 func redactRequestTarget(u *url.URL) string {
 	if u == nil {
 		return "/"
+	}
+
+	if strings.HasPrefix(u.Path, "/s/") {
+		return "/s/REDACTED"
 	}
 
 	if u.RawQuery == "" {
@@ -636,4 +669,22 @@ type guestPageView struct {
 	GuestToken string
 	Readonly   bool
 	ModeLabel  string
+}
+
+func (s *Server) renderGuestPage(w http.ResponseWriter, session *Session) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	view := guestPageView{
+		Title:      "AI Warden Guest Terminal",
+		SessionID:  session.InviteID,
+		GuestToken: session.GuestToken,
+		Readonly:   session.Readonly,
+		ModeLabel: map[bool]string{
+			true:  "read-only",
+			false: "interactive",
+		}[session.Readonly],
+	}
+
+	if err := s.guestPage.Execute(w, view); err != nil {
+		http.Error(w, "failed to render guest page", http.StatusInternalServerError)
+	}
 }
