@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Warden | Debug Together, Without Sharing SSH</title>
+  <meta
+    name="description"
+    content="Warden is remote terminal help without SSH handoff. Debug together in the browser while the host stays in control.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;700&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="page-shell">
+    <header class="site-header">
+      <a class="brand" href="#top">
+        <span class="brand-mark">W</span>
+        <span>Warden</span>
+      </a>
+      <nav class="site-nav" aria-label="Primary">
+        <a href="#why">Why</a>
+        <a href="#workflow">How It Works</a>
+        <a href="#faq">FAQ</a>
+      </nav>
+      <a class="nav-cta" href="#apply">Become a Design Partner</a>
+    </header>
+
+    <main id="top">
+      <section class="hero">
+        <div class="hero-copy">
+          <div class="eyebrow">Terminal support without permanent access</div>
+          <h1>Debug together, without sharing SSH.</h1>
+          <p class="hero-text">A shared terminal for support and debugging. Guests join in the browser. Hosts stay in control.</p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="#apply">Apply for Early Access</a>
+            <a class="button button-secondary" href="#demo">See the Workflow</a>
+          </div>
+          <ul class="signal-list" aria-label="Core product signals">
+            <li>No SSH handoff</li>
+            <li>No VPN setup</li>
+            <li>Host approval for risky commands</li>
+            <li>Bring your trusted LLM for risk assessment</li>
+          </ul>
+        </div>
+
+        <div class="hero-panel" id="demo" aria-label="Illustrated product workflow">
+          <div class="panel-topbar">
+            <span class="panel-pill">host shell</span>
+            <span class="panel-pill panel-pill-accent">guest joined</span>
+          </div>
+          <div class="terminal-card">
+            <div class="terminal-line"><span class="prompt">host$</span> warden start --server warden.example.com</div>
+            <div class="terminal-line muted">Session created: <span class="token">sess_82f6</span></div>
+            <div class="terminal-line muted">Guest URL opened in browser</div>
+            <div class="terminal-line"><span class="prompt">guest&gt;</span> sudo systemctl restart docker</div>
+            <div class="approval-box">
+              <div class="approval-label">Approval required</div>
+              <p>Remote user is attempting to run a risky command.</p>
+              <div class="approval-actions">
+                <span class="approval-chip allow">Allow</span>
+                <span class="approval-chip deny">Deny</span>
+              </div>
+            </div>
+            <div class="terminal-line"><span class="prompt">host$</span> approved, command forwarded</div>
+          </div>
+          <div class="demo-footnote">Built for real terminal support, not screen sharing.</div>
+        </div>
+      </section>
+
+      <section class="trust-strip" aria-label="Quick positioning statements">
+        <div>Faster than pasted logs</div>
+        <div>Safer than shared SSH</div>
+        <div>Better than screen share for terminal work</div>
+      </section>
+
+      <section class="section-grid" id="why">
+        <div class="section-heading">
+          <div class="eyebrow">Why it matters</div>
+          <h2>Remote terminal support breaks on trust.</h2>
+        </div>
+        <div class="card-grid">
+          <article class="info-card">
+            <h3>Screen share is a poor shell workflow</h3>
+            <p>
+              It works for visual context. It breaks down when both people need to work inside a real shell.
+            </p>
+          </article>
+          <article class="info-card">
+            <h3>SSH is often too much, too early</h3>
+            <p>
+              Many support sessions do not justify new accounts, shared keys, or VPN access.
+            </p>
+          </article>
+          <article class="info-card">
+            <h3>Local control</h3>
+            <p>
+              The host stays present, can stop the session locally, and can gate risky actions.
+            </p>
+          </article>
+          <article class="info-card">
+            <h3>Data loss protection</h3>
+            <p>
+              Sensitive terminal data stays under tighter control during support sessions.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section class="workflow-section" id="workflow">
+        <div class="section-heading narrow">
+          <div class="eyebrow">How it works</div>
+          <h2>Three steps.</h2>
+        </div>
+        <div class="workflow-grid">
+          <article class="step-card">
+            <span class="step-index">01</span>
+            <h3>Host starts a session locally</h3>
+            <p>
+              Start a fresh terminal session and generate a temporary guest link.
+            </p>
+          </article>
+          <article class="step-card">
+            <span class="step-index">02</span>
+            <h3>Guest joins in the browser</h3>
+            <p>
+              The expert joins in the browser. No SSH exchange, no permanent account, no new inbound port.
+            </p>
+          </article>
+          <article class="step-card">
+            <span class="step-index">03</span>
+            <h3>Host keeps control throughout</h3>
+            <p>
+              The host can monitor, stop, and approve before risky commands run.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section class="faq-section" id="faq">
+        <div class="section-heading faq-heading">
+          <h2>FAQ</h2>
+        </div>
+        <div class="faq-list">
+          <article class="faq-item">
+            <h3>Why not just use SSH?</h3>
+            <p>Because the real problem is usually not access. It is the trust cost of giving direct shell access to someone outside your team.</p>
+          </article>
+          <article class="faq-item">
+            <h3>Why not just use Zoom or Slack screen sharing?</h3>
+            <p>Because screen share is a visual workaround. It is slower when both sides need to work inside the shell.</p>
+          </article>
+          <article class="faq-item">
+            <h3>Can the host stop the session immediately?</h3>
+            <p>Yes. The host can interrupt and close the session locally.</p>
+          </article>
+          <article class="faq-item">
+            <h3>How is Warden secured?</h3>
+            <p>Warden is built around local host control, temporary sessions, approval gates, and trusted model integrations. End-to-end encryption is on the roadmap.</p>
+          </article>
+          <article class="faq-item">
+            <h3>Can I self-host Warden?</h3>
+            <p>Yes. Warden is designed to support self-hosted deployments for teams that want to run it in their own environment.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="cta-section" id="apply">
+        <div class="cta-panel">
+          <div class="eyebrow">Early access</div>
+          <h2>Apply to be an early design partner.</h2>
+          <p>
+            If you regularly help customers debug Linux, Docker, Postgres, systemd, or self-hosted services, we want to hear from you.
+          </p>
+          <div class="cta-actions">
+            <a class="button button-primary" href="https://tally.so/r/PLACEHOLDER">Apply for Early Access</a>
+            <a class="button button-secondary" href="https://github.com/AIRemoteWarden/warden">View the Repository</a>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+</body>
+</html>
