@@ -25,6 +25,7 @@
         <a href="#why">Why</a>
         <a href="#workflow">How It Works</a>
         <a href="#faq">FAQ</a>
+        <a href="https://github.com/AIRemoteWarden/warden">GitHub</a>
       </nav>
       <a class="nav-cta" href="#apply">Become a Design Partner</a>
     </header>
@@ -47,27 +48,19 @@
           </ul>
         </div>
 
-        <div class="hero-panel" id="demo" aria-label="Illustrated product workflow">
-          <div class="panel-topbar">
-            <span class="panel-pill">host shell</span>
-            <span class="panel-pill panel-pill-accent">guest joined</span>
-          </div>
-          <div class="terminal-card">
-            <div class="terminal-line"><span class="prompt">host$</span> warden start --server warden.example.com</div>
-            <div class="terminal-line muted">Session created: <span class="token">sess_82f6</span></div>
-            <div class="terminal-line muted">Guest URL opened in browser</div>
-            <div class="terminal-line"><span class="prompt">guest&gt;</span> sudo systemctl restart docker</div>
-            <div class="approval-box">
-              <div class="approval-label">Approval required</div>
-              <p>Remote user is attempting to run a risky command.</p>
-              <div class="approval-actions">
-                <span class="approval-chip allow">Allow</span>
-                <span class="approval-chip deny">Deny</span>
-              </div>
-            </div>
-            <div class="terminal-line"><span class="prompt">host$</span> approved, command forwarded</div>
-          </div>
-          <div class="demo-footnote">Built for real terminal support, not screen sharing.</div>
+        <div class="hero-panel" id="demo" aria-label="Product demo video">
+          <video
+            class="demo-video"
+            muted
+            loop
+            playsinline
+            controls
+            preload="metadata"
+            poster="./warden-demo-poster.png">
+            <source src="./warden-demo.mp4" type="video/mp4">
+            Your browser does not support embedded video.
+          </video>
+          <div class="demo-footnote">Real product footage. No screen share.</div>
         </div>
       </section>
 

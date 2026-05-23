@@ -232,75 +232,15 @@ a {
   color: var(--accent-strong);
 }
 
-.terminal-card {
-  padding: 18px;
+.demo-video {
+  display: block;
+  width: 100%;
+  border: 1px solid rgba(30, 28, 25, 0.1);
   border-radius: 22px;
   background: #181511;
-  color: #f8f1de;
-  font-family: "IBM Plex Mono", monospace;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
-}
-
-.terminal-line {
-  margin-bottom: 12px;
-  font-size: 14px;
-  line-height: 1.6;
-}
-
-.prompt {
-  color: #8ee5d5;
-}
-
-.muted {
-  color: #b6ae9f;
-}
-
-.token {
-  color: #ffcc88;
-}
-
-.approval-box {
-  margin: 18px 0;
-  padding: 16px;
-  border: 1px solid rgba(255, 204, 136, 0.3);
-  border-radius: var(--radius-sm);
-  background: rgba(255, 247, 230, 0.08);
-}
-
-.approval-label {
-  margin-bottom: 8px;
-  color: #ffcc88;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-}
-
-.approval-box p {
-  margin: 0;
-  color: #efe4cf;
-  line-height: 1.55;
-}
-
-.approval-actions {
-  display: flex;
-  gap: 10px;
-  margin-top: 12px;
-}
-
-.approval-chip {
-  padding: 6px 10px;
-  border-radius: 999px;
-  font-size: 12px;
-}
-
-.allow {
-  background: rgba(110, 231, 183, 0.18);
-  color: #86efac;
-}
-
-.deny {
-  background: rgba(248, 113, 113, 0.15);
-  color: #fca5a5;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
 }
 
 .demo-footnote,
@@ -525,10 +465,6 @@ a {
   .faq-item,
   .cta-panel {
     border-radius: 22px;
-  }
-
-  .terminal-card {
-    padding: 16px;
   }
 
   .button,
