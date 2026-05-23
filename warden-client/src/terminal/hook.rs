@@ -285,6 +285,8 @@ if [ -f "$HOME/.bashrc" ]; then
   . "$HOME/.bashrc"
 fi
 
+export PS1='\[\033[1;38;5;46m\][warden]\[\033[0m\] \[\033[1;38;5;81m\]\W\[\033[0m\]\$ '
+
 export AIWARDEN_REQUEST_PIPE="{request_pipe}"
 export AIWARDEN_RESPONSE_PIPE="{response_pipe}"
 
