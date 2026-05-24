@@ -7,6 +7,8 @@ use crate::transport::SessionCreated;
 #[derive(Debug, Serialize)]
 struct CreateSessionRequest {
     readonly: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    idle_timeout_seconds: Option<u64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -15,6 +17,7 @@ struct CreateSessionResponse {
     host_token: String,
     guest_url: String,
     relay_url: Option<String>,
+    idle_timeout_seconds: Option<u64>,
 }
 
 pub async fn create_session(
@@ -26,6 +29,7 @@ pub async fn create_session(
         .post(url)
         .json(&CreateSessionRequest {
             readonly: config.options.readonly,
+            idle_timeout_seconds: config.options.idle_timeout_seconds,
         })
         .send()
         .await
@@ -46,5 +50,6 @@ pub async fn create_session(
         relay_url: payload
             .relay_url
             .unwrap_or_else(|| config.relay_base_url.clone()),
+        idle_timeout_seconds: payload.idle_timeout_seconds,
     })
 }

@@ -5,6 +5,7 @@ use crate::policy::PolicyEngine;
 use crate::terminal::TerminalManager;
 use crate::transport::TransportManager;
 use crate::ui::UiRenderer;
+use std::str::FromStr;
 
 pub struct CliBootstrap;
 
@@ -46,6 +47,22 @@ impl CliBootstrap {
             match arg.as_str() {
                 "start" => {}
                 "--readonly" => parsed.readonly = true,
+                "--idle-timeout" => {
+                    let raw = args.next().ok_or(AppError::InvalidArguments(
+                        "missing idle timeout seconds".into(),
+                    ))?;
+                    let seconds = u64::from_str(&raw).map_err(|_| {
+                        AppError::InvalidArguments(
+                            "idle timeout must be a positive integer number of seconds".into(),
+                        )
+                    })?;
+                    if seconds == 0 {
+                        return Err(AppError::InvalidArguments(
+                            "idle timeout must be greater than zero".into(),
+                        ));
+                    }
+                    parsed.idle_timeout_seconds = Some(seconds);
+                }
                 "--shell" => {
                     let shell = args
                         .next()

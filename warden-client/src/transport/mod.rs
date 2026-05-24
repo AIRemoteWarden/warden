@@ -59,6 +59,7 @@ impl TransportManager {
                     host_token: offline_host_token(),
                     guest_url: offline_guest_url(),
                     relay_url: config.relay_base_url.clone(),
+                    idle_timeout_seconds: config.options.idle_timeout_seconds,
                 })
             }
             Err(err) => Err(err),

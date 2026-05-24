@@ -322,6 +322,7 @@ pub struct SessionContext {
     pub host_token: String,
     pub guest_url: String,
     pub relay_url: String,
+    pub idle_timeout_seconds: Option<u64>,
     pub cwd: PathBuf,
     pub readonly: bool,
     pub guest_connected: bool,
@@ -339,5 +340,6 @@ impl SessionContext {
         self.host_token = created.host_token;
         self.guest_url = created.guest_url;
         self.relay_url = created.relay_url;
+        self.idle_timeout_seconds = created.idle_timeout_seconds;
     }
 }

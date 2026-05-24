@@ -8,6 +8,7 @@ use crate::errors::{AppError, Result};
 #[derive(Debug, Clone, Default)]
 pub struct ClientOptions {
     pub readonly: bool,
+    pub idle_timeout_seconds: Option<u64>,
     pub preferred_shell: Option<String>,
     pub server: Option<String>,
     pub llm: Option<String>,

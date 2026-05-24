@@ -4,6 +4,7 @@ pub struct SessionCreated {
     pub host_token: String,
     pub guest_url: String,
     pub relay_url: String,
+    pub idle_timeout_seconds: Option<u64>,
 }
 
 #[derive(Debug)]

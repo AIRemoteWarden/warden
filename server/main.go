@@ -16,6 +16,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -31,9 +32,11 @@ var webFS embed.FS
 var embeddedDefaultPolicy []byte
 
 type Config struct {
-	ControlAddr string
-	PublicHost  string
-	PolicyPath  string
+	ControlAddr          string
+	PublicHost           string
+	PolicyPath           string
+	SessionIdleTimeout   time.Duration
+	SessionMaxIdleTimeout time.Duration
 }
 
 type Server struct {
@@ -46,9 +49,11 @@ type Server struct {
 
 func main() {
 	cfg := Config{
-        ControlAddr: envOrAny([]string{"WARDEN_CONTROL_ADDR", "AIWARDEN_CONTROL_ADDR", "DEBUGIT_CONTROL_ADDR"}, ":8080"),
-        PublicHost:  envOrAny([]string{"WARDEN_PUBLIC_HOST", "AIWARDEN_PUBLIC_HOST", "DEBUGIT_PUBLIC_HOST"}, "localhost"),
-        PolicyPath:  envOrAny([]string{"WARDEN_POLICY_PATH", "AIWARDEN_POLICY_PATH", "DEBUGIT_POLICY_PATH"}, ""),
+		ControlAddr:           envOrAny([]string{"WARDEN_CONTROL_ADDR", "AIWARDEN_CONTROL_ADDR", "DEBUGIT_CONTROL_ADDR"}, ":8080"),
+		PublicHost:            envOrAny([]string{"WARDEN_PUBLIC_HOST", "AIWARDEN_PUBLIC_HOST", "DEBUGIT_PUBLIC_HOST"}, "localhost"),
+		PolicyPath:            envOrAny([]string{"WARDEN_POLICY_PATH", "AIWARDEN_POLICY_PATH", "DEBUGIT_POLICY_PATH"}, ""),
+		SessionIdleTimeout:    envDurationSecondsAny([]string{"WARDEN_SESSION_IDLE_TIMEOUT_SECONDS", "AIWARDEN_SESSION_IDLE_TIMEOUT_SECONDS", "DEBUGIT_SESSION_IDLE_TIMEOUT_SECONDS"}, 10*time.Minute),
+		SessionMaxIdleTimeout: envDurationSecondsAny([]string{"WARDEN_SESSION_MAX_IDLE_TIMEOUT_SECONDS", "AIWARDEN_SESSION_MAX_IDLE_TIMEOUT_SECONDS", "DEBUGIT_SESSION_MAX_IDLE_TIMEOUT_SECONDS"}, 2*time.Hour),
 	}
 
 	assetFS, err := fs.Sub(webFS, "web/assets")
@@ -73,6 +78,10 @@ func main() {
 			CheckOrigin: func(r *http.Request) bool { return true },
 		},
 	}
+
+	cleanupCtx, cleanupCancel := context.WithCancel(context.Background())
+	defer cleanupCancel()
+	go srv.runIdleExpiryLoop(cleanupCtx)
 
 	controlMux := http.NewServeMux()
 	controlMux.Handle("/assets/", srv.staticAssets)
@@ -100,6 +109,7 @@ func main() {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
 	<-sigCh
+	cleanupCancel()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -119,12 +129,19 @@ func (s *Server) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	session := s.sessions.Create(req.Readonly, s.cfg)
+	idleTimeout, err := resolveIdleTimeout(req.IdleTimeoutSeconds, s.cfg)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	session := s.sessions.Create(req.Readonly, idleTimeout, s.cfg)
 	writeJSON(w, http.StatusOK, CreateSessionResponse{
-		SessionID: session.ID,
-		HostToken: session.HostToken,
-		GuestURL:  session.GuestURL,
-		RelayURL:  session.HostRelayURL,
+		SessionID:          session.ID,
+		HostToken:          session.HostToken,
+		GuestURL:           session.GuestURL,
+		RelayURL:           session.HostRelayURL,
+		IdleTimeoutSeconds: int64(session.IdleTimeout / time.Second),
 	})
 }
 
@@ -164,10 +181,14 @@ func (s *Server) handleSessionInfo(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"session_id":      session.ID,
-		"readonly":        session.Readonly,
-		"host_connected":  session.HostConn != nil,
-		"guest_connected": session.GuestConn != nil,
+		"session_id":           session.ID,
+		"state":                "active",
+		"readonly":             session.Readonly,
+		"host_connected":       session.HostConn != nil,
+		"guest_connected":      session.GuestConn != nil,
+		"idle_timeout_seconds": int64(session.IdleTimeout / time.Second),
+		"last_activity_at":     session.LastActivityAt.UTC().Format(time.RFC3339Nano),
+		"expires_at":           session.LastActivityAt.Add(session.IdleTimeout).UTC().Format(time.RFC3339Nano),
 	})
 }
 
@@ -237,6 +258,7 @@ func (s *Server) handleHostWS(w http.ResponseWriter, r *http.Request) {
 			_ = s.sessions.BroadcastToGuest(session.ID, []byte(`{"type":"close"}`))
 			return
 		}
+		s.sessions.Touch(session.ID)
 
 		var envelope MessageEnvelope
 		if err := json.Unmarshal(data, &envelope); err != nil {
@@ -293,6 +315,7 @@ func (s *Server) handleGuestWS(w http.ResponseWriter, r *http.Request) {
 			}
 			return
 		}
+		s.sessions.Touch(session.ID)
 
 		var msg GuestInbound
 		if err := json.Unmarshal(data, &msg); err != nil {
@@ -337,22 +360,26 @@ func NewSessionStore() *SessionStore {
 	}
 }
 
-func (s *SessionStore) Create(readonly bool, cfg Config) *Session {
+func (s *SessionStore) Create(readonly bool, idleTimeout time.Duration, cfg Config) *Session {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	now := time.Now().UTC()
 	id := randomToken("sess")
 	hostToken := randomToken("host")
 	guestToken := randomToken("guest")
 	inviteID := randomInviteID(10)
 	session := &Session{
-		ID:           id,
-		HostToken:    hostToken,
-		GuestToken:   guestToken,
-		InviteID:     inviteID,
-		Readonly:     readonly,
-		GuestURL:     fmt.Sprintf("%s/s/%s", publicHTTPBase(cfg), inviteID),
-		HostRelayURL: fmt.Sprintf("%s/ws/host", publicWSBase(cfg)),
+		ID:             id,
+		HostToken:      hostToken,
+		GuestToken:     guestToken,
+		InviteID:       inviteID,
+		Readonly:       readonly,
+		GuestURL:       fmt.Sprintf("%s/s/%s", publicHTTPBase(cfg), inviteID),
+		HostRelayURL:   fmt.Sprintf("%s/ws/host", publicWSBase(cfg)),
+		CreatedAt:      now,
+		LastActivityAt: now,
+		IdleTimeout:    idleTimeout,
 	}
 
 	s.byID[id] = session
@@ -401,6 +428,7 @@ func (s *SessionStore) AttachHost(id string, conn *websocket.Conn) error {
 		return fmt.Errorf("host already connected")
 	}
 	session.HostConn = conn
+	session.LastActivityAt = time.Now().UTC()
 	return nil
 }
 
@@ -415,6 +443,7 @@ func (s *SessionStore) AttachGuest(id string, conn *websocket.Conn) error {
 		return fmt.Errorf("guest already connected")
 	}
 	session.GuestConn = conn
+	session.LastActivityAt = time.Now().UTC()
 	return nil
 }
 
@@ -422,7 +451,7 @@ func (s *SessionStore) DetachHost(id string, conn *websocket.Conn) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if session, ok := s.byID[id]; ok && session.HostConn == conn {
-		s.expireSessionLocked(session)
+		s.closeSessionLocked(session, "host_disconnected")
 	}
 }
 
@@ -465,11 +494,32 @@ func (s *SessionStore) BroadcastToGuest(id string, data []byte) error {
 	return guest.WriteMessage(websocket.TextMessage, data)
 }
 
-func (s *SessionStore) expireSessionLocked(session *Session) {
+func (s *SessionStore) Touch(id string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if session, ok := s.byID[id]; ok {
+		session.LastActivityAt = time.Now().UTC()
+	}
+}
+
+func (s *SessionStore) ExpireIdleSessions(now time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	now = now.UTC()
+	for _, session := range s.byID {
+		if now.Sub(session.LastActivityAt) >= session.IdleTimeout {
+			s.closeSessionLocked(session, "idle_timeout")
+		}
+	}
+}
+
+func (s *SessionStore) closeSessionLocked(session *Session, reason string) {
 	delete(s.byID, session.ID)
 	delete(s.byHostToken, session.HostToken)
 	delete(s.byGuestToken, session.GuestToken)
 	delete(s.byInviteID, session.InviteID)
+	log.Printf("session closed: id=%s reason=%s", session.ID, reason)
 
 	if session.GuestConn != nil {
 		_ = session.GuestConn.WriteMessage(websocket.TextMessage, []byte(`{"type":"close"}`))
@@ -484,26 +534,31 @@ func (s *SessionStore) expireSessionLocked(session *Session) {
 }
 
 type Session struct {
-	ID           string
-	HostToken    string
-	GuestToken   string
-	InviteID     string
-	Readonly     bool
-	GuestURL     string
-	HostRelayURL string
-	HostConn     *websocket.Conn
-	GuestConn    *websocket.Conn
+	ID             string
+	HostToken      string
+	GuestToken     string
+	InviteID       string
+	Readonly       bool
+	GuestURL       string
+	HostRelayURL   string
+	CreatedAt      time.Time
+	LastActivityAt time.Time
+	IdleTimeout    time.Duration
+	HostConn       *websocket.Conn
+	GuestConn      *websocket.Conn
 }
 
 type CreateSessionRequest struct {
-	Readonly bool `json:"readonly"`
+	Readonly           bool   `json:"readonly"`
+	IdleTimeoutSeconds *int64 `json:"idle_timeout_seconds,omitempty"`
 }
 
 type CreateSessionResponse struct {
-	SessionID  string `json:"session_id"`
-	HostToken  string `json:"host_token"`
-	GuestURL   string `json:"guest_url"`
-	RelayURL   string `json:"relay_url"`
+	SessionID          string `json:"session_id"`
+	HostToken          string `json:"host_token"`
+	GuestURL           string `json:"guest_url"`
+	RelayURL           string `json:"relay_url"`
+	IdleTimeoutSeconds int64  `json:"idle_timeout_seconds"`
 }
 
 type MessageEnvelope struct {
@@ -664,6 +719,48 @@ func envOrAny(keys []string, fallback string) string {
 		}
 	}
 	return fallback
+}
+
+func envDurationSecondsAny(keys []string, fallback time.Duration) time.Duration {
+	for _, key := range keys {
+		if raw := os.Getenv(key); raw != "" {
+			value, err := strconv.ParseInt(raw, 10, 64)
+			if err != nil || value <= 0 {
+				log.Fatalf("invalid %s: expected positive integer seconds", key)
+			}
+			return time.Duration(value) * time.Second
+		}
+	}
+	return fallback
+}
+
+func resolveIdleTimeout(requestedSeconds *int64, cfg Config) (time.Duration, error) {
+	timeout := cfg.SessionIdleTimeout
+	if requestedSeconds != nil {
+		if *requestedSeconds <= 0 {
+			return 0, fmt.Errorf("idle_timeout_seconds must be positive")
+		}
+		timeout = time.Duration(*requestedSeconds) * time.Second
+	}
+
+	if cfg.SessionMaxIdleTimeout > 0 && timeout > cfg.SessionMaxIdleTimeout {
+		timeout = cfg.SessionMaxIdleTimeout
+	}
+	return timeout, nil
+}
+
+func (s *Server) runIdleExpiryLoop(ctx context.Context) {
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case now := <-ticker.C:
+			s.sessions.ExpireIdleSessions(now)
+		}
+	}
 }
 
 type guestPageView struct {
