@@ -51,6 +51,12 @@ impl UiRenderer {
         self.write_block(&[format!("Session ended: {reason:?}")], true);
     }
 
+    pub fn show_idle_timeout_warning(&mut self, remaining_seconds: u64) {
+        self.write_notice(&format!(
+            "Session idle. Auto-closing in {remaining_seconds}s unless activity resumes."
+        ));
+    }
+
     pub fn write_terminal_output(&mut self, bytes: &[u8]) {
         let mut stdout = std::io::stdout().lock();
         let _ = stdout.write_all(bytes);

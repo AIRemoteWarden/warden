@@ -12,7 +12,7 @@ use tokio_tungstenite::tungstenite::Message;
 use crate::errors::{AppError, Result};
 use crate::policy::{PolicyDecision, RiskLevel};
 use crate::platform::TerminalSize;
-use crate::transport::TransportEvent;
+use crate::transport::{IdleTimeoutWarning, TransportEvent};
 
 #[derive(Debug, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -34,6 +34,8 @@ enum InboundRelayMessage {
     GuestJoined,
     GuestLeft,
     GuestInput { data_b64: String },
+    IdleTimeoutWarning { remaining_seconds: u64, expires_at: String },
+    IdleTimeoutWarningCleared,
     Close,
     Error,
 }
@@ -82,6 +84,18 @@ pub async fn connect(
                             let _ = read_event_tx.send(TransportEvent::GuestInput(bytes));
                         }
                     }
+                    Ok(InboundRelayMessage::IdleTimeoutWarning {
+                        remaining_seconds,
+                        expires_at,
+                    }) => {
+                        let _ = read_event_tx.send(TransportEvent::IdleTimeoutWarning(
+                            IdleTimeoutWarning {
+                                remaining_seconds,
+                                expires_at,
+                            },
+                        ));
+                    }
+                    Ok(InboundRelayMessage::IdleTimeoutWarningCleared) => {}
                     Ok(InboundRelayMessage::Close) => {
                         let _ = read_event_tx.send(TransportEvent::RemoteClose);
                         break;

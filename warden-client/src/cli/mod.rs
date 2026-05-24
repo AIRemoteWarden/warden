@@ -63,6 +63,17 @@ impl CliBootstrap {
                     }
                     parsed.idle_timeout_seconds = Some(seconds);
                 }
+                "--idle-warning" => {
+                    let raw = args.next().ok_or(AppError::InvalidArguments(
+                        "missing idle warning seconds".into(),
+                    ))?;
+                    let seconds = u64::from_str(&raw).map_err(|_| {
+                        AppError::InvalidArguments(
+                            "idle warning must be a non-negative integer number of seconds".into(),
+                        )
+                    })?;
+                    parsed.idle_warning_seconds = Some(seconds);
+                }
                 "--shell" => {
                     let shell = args
                         .next()

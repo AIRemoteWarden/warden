@@ -32,11 +32,12 @@ var webFS embed.FS
 var embeddedDefaultPolicy []byte
 
 type Config struct {
-	ControlAddr          string
-	PublicHost           string
-	PolicyPath           string
-	SessionIdleTimeout   time.Duration
+	ControlAddr           string
+	PublicHost            string
+	PolicyPath            string
+	SessionIdleTimeout    time.Duration
 	SessionMaxIdleTimeout time.Duration
+	SessionIdleWarning    time.Duration
 }
 
 type Server struct {
@@ -54,6 +55,7 @@ func main() {
 		PolicyPath:            envOrAny([]string{"WARDEN_POLICY_PATH", "AIWARDEN_POLICY_PATH", "DEBUGIT_POLICY_PATH"}, ""),
 		SessionIdleTimeout:    envDurationSecondsAny([]string{"WARDEN_SESSION_IDLE_TIMEOUT_SECONDS", "AIWARDEN_SESSION_IDLE_TIMEOUT_SECONDS", "DEBUGIT_SESSION_IDLE_TIMEOUT_SECONDS"}, 10*time.Minute),
 		SessionMaxIdleTimeout: envDurationSecondsAny([]string{"WARDEN_SESSION_MAX_IDLE_TIMEOUT_SECONDS", "AIWARDEN_SESSION_MAX_IDLE_TIMEOUT_SECONDS", "DEBUGIT_SESSION_MAX_IDLE_TIMEOUT_SECONDS"}, 2*time.Hour),
+		SessionIdleWarning:    envDurationSecondsAny([]string{"WARDEN_SESSION_IDLE_WARNING_SECONDS", "AIWARDEN_SESSION_IDLE_WARNING_SECONDS", "DEBUGIT_SESSION_IDLE_WARNING_SECONDS"}, time.Minute),
 	}
 
 	assetFS, err := fs.Sub(webFS, "web/assets")
@@ -135,13 +137,20 @@ func (s *Server) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	session := s.sessions.Create(req.Readonly, idleTimeout, s.cfg)
+	idleWarning, err := resolveIdleWarning(req.IdleWarningSeconds, idleTimeout, s.cfg)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	session := s.sessions.Create(req.Readonly, idleTimeout, idleWarning, s.cfg)
 	writeJSON(w, http.StatusOK, CreateSessionResponse{
 		SessionID:          session.ID,
 		HostToken:          session.HostToken,
 		GuestURL:           session.GuestURL,
 		RelayURL:           session.HostRelayURL,
 		IdleTimeoutSeconds: int64(session.IdleTimeout / time.Second),
+		IdleWarningSeconds: int64(session.IdleWarningBefore / time.Second),
 	})
 }
 
@@ -187,6 +196,7 @@ func (s *Server) handleSessionInfo(w http.ResponseWriter, r *http.Request) {
 		"host_connected":       session.HostConn != nil,
 		"guest_connected":      session.GuestConn != nil,
 		"idle_timeout_seconds": int64(session.IdleTimeout / time.Second),
+		"idle_warning_seconds": int64(session.IdleWarningBefore / time.Second),
 		"last_activity_at":     session.LastActivityAt.UTC().Format(time.RFC3339Nano),
 		"expires_at":           session.LastActivityAt.Add(session.IdleTimeout).UTC().Format(time.RFC3339Nano),
 	})
@@ -360,7 +370,7 @@ func NewSessionStore() *SessionStore {
 	}
 }
 
-func (s *SessionStore) Create(readonly bool, idleTimeout time.Duration, cfg Config) *Session {
+func (s *SessionStore) Create(readonly bool, idleTimeout time.Duration, idleWarning time.Duration, cfg Config) *Session {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -380,6 +390,7 @@ func (s *SessionStore) Create(readonly bool, idleTimeout time.Duration, cfg Conf
 		CreatedAt:      now,
 		LastActivityAt: now,
 		IdleTimeout:    idleTimeout,
+		IdleWarningBefore: idleWarning,
 	}
 
 	s.byID[id] = session
@@ -429,6 +440,7 @@ func (s *SessionStore) AttachHost(id string, conn *websocket.Conn) error {
 	}
 	session.HostConn = conn
 	session.LastActivityAt = time.Now().UTC()
+	session.IdleWarningSent = false
 	return nil
 }
 
@@ -444,6 +456,7 @@ func (s *SessionStore) AttachGuest(id string, conn *websocket.Conn) error {
 	}
 	session.GuestConn = conn
 	session.LastActivityAt = time.Now().UTC()
+	session.IdleWarningSent = false
 	return nil
 }
 
@@ -498,19 +511,67 @@ func (s *SessionStore) Touch(id string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if session, ok := s.byID[id]; ok {
+		if session.IdleWarningSent {
+			s.sendIdleWarningClearedLocked(session)
+		}
 		session.LastActivityAt = time.Now().UTC()
+		session.IdleWarningSent = false
 	}
 }
 
-func (s *SessionStore) ExpireIdleSessions(now time.Time) {
+func (s *SessionStore) ProcessIdleTimeouts(now time.Time) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	now = now.UTC()
 	for _, session := range s.byID {
-		if now.Sub(session.LastActivityAt) >= session.IdleTimeout {
+		elapsed := now.Sub(session.LastActivityAt)
+		if elapsed >= session.IdleTimeout {
 			s.closeSessionLocked(session, "idle_timeout")
+			continue
 		}
+
+		if session.IdleWarningBefore <= 0 || session.IdleWarningSent {
+			continue
+		}
+
+		remaining := session.IdleTimeout - elapsed
+		if remaining <= session.IdleWarningBefore {
+			session.IdleWarningSent = true
+			s.sendIdleWarningLocked(session, remaining)
+		}
+	}
+}
+
+func (s *SessionStore) sendIdleWarningLocked(session *Session, remaining time.Duration) {
+	if remaining < 0 {
+		remaining = 0
+	}
+	remainingSeconds := int64(remaining.Round(time.Second) / time.Second)
+	if remainingSeconds < 0 {
+		remainingSeconds = 0
+	}
+	payload := IdleTimeoutWarning{
+		Type:             "idle_timeout_warning",
+		RemainingSeconds: remainingSeconds,
+		ExpiresAt:        session.LastActivityAt.Add(session.IdleTimeout).UTC().Format(time.RFC3339Nano),
+	}
+
+	if session.HostConn != nil {
+		_ = writeWSJSON(session.HostConn, payload)
+	}
+	if session.GuestConn != nil {
+		_ = writeWSJSON(session.GuestConn, payload)
+	}
+}
+
+func (s *SessionStore) sendIdleWarningClearedLocked(session *Session) {
+	payload := IdleTimeoutWarningCleared{Type: "idle_timeout_warning_cleared"}
+	if session.HostConn != nil {
+		_ = writeWSJSON(session.HostConn, payload)
+	}
+	if session.GuestConn != nil {
+		_ = writeWSJSON(session.GuestConn, payload)
 	}
 }
 
@@ -544,6 +605,8 @@ type Session struct {
 	CreatedAt      time.Time
 	LastActivityAt time.Time
 	IdleTimeout    time.Duration
+	IdleWarningBefore time.Duration
+	IdleWarningSent   bool
 	HostConn       *websocket.Conn
 	GuestConn      *websocket.Conn
 }
@@ -551,6 +614,7 @@ type Session struct {
 type CreateSessionRequest struct {
 	Readonly           bool   `json:"readonly"`
 	IdleTimeoutSeconds *int64 `json:"idle_timeout_seconds,omitempty"`
+	IdleWarningSeconds *int64 `json:"idle_warning_seconds,omitempty"`
 }
 
 type CreateSessionResponse struct {
@@ -559,6 +623,7 @@ type CreateSessionResponse struct {
 	GuestURL           string `json:"guest_url"`
 	RelayURL           string `json:"relay_url"`
 	IdleTimeoutSeconds int64  `json:"idle_timeout_seconds"`
+	IdleWarningSeconds int64  `json:"idle_warning_seconds"`
 }
 
 type MessageEnvelope struct {
@@ -592,6 +657,16 @@ type RelayError struct {
 
 func (RelayError) MarshalJSON() ([]byte, error) {
 	return json.Marshal(map[string]string{"type": "error"})
+}
+
+type IdleTimeoutWarning struct {
+	Type             string `json:"type"`
+	RemainingSeconds int64  `json:"remaining_seconds"`
+	ExpiresAt        string `json:"expires_at"`
+}
+
+type IdleTimeoutWarningCleared struct {
+	Type string `json:"type"`
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload any) {
@@ -749,6 +824,30 @@ func resolveIdleTimeout(requestedSeconds *int64, cfg Config) (time.Duration, err
 	return timeout, nil
 }
 
+func resolveIdleWarning(requestedSeconds *int64, idleTimeout time.Duration, cfg Config) (time.Duration, error) {
+	if requestedSeconds != nil {
+		if *requestedSeconds < 0 {
+			return 0, fmt.Errorf("idle_warning_seconds must be zero or positive")
+		}
+		if *requestedSeconds == 0 {
+			return 0, nil
+		}
+		warning := time.Duration(*requestedSeconds) * time.Second
+		if warning >= idleTimeout {
+			return 0, fmt.Errorf("idle_warning_seconds must be less than idle_timeout_seconds")
+		}
+		return warning, nil
+	}
+
+	if cfg.SessionIdleWarning <= 0 || idleTimeout <= time.Second {
+		return 0, nil
+	}
+	if cfg.SessionIdleWarning >= idleTimeout {
+		return idleTimeout - time.Second, nil
+	}
+	return cfg.SessionIdleWarning, nil
+}
+
 func (s *Server) runIdleExpiryLoop(ctx context.Context) {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
@@ -758,7 +857,7 @@ func (s *Server) runIdleExpiryLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case now := <-ticker.C:
-			s.sessions.ExpireIdleSessions(now)
+			s.sessions.ProcessIdleTimeouts(now)
 		}
 	}
 }

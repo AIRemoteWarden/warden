@@ -2,7 +2,7 @@ mod control;
 mod message;
 mod relay;
 
-pub use message::{SessionCreated, TransportEvent};
+pub use message::{IdleTimeoutWarning, SessionCreated, TransportEvent};
 
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
@@ -60,6 +60,7 @@ impl TransportManager {
                     guest_url: offline_guest_url(),
                     relay_url: config.relay_base_url.clone(),
                     idle_timeout_seconds: config.options.idle_timeout_seconds,
+                    idle_warning_seconds: config.options.idle_warning_seconds,
                 })
             }
             Err(err) => Err(err),

@@ -5,6 +5,7 @@
   const statusEl = document.getElementById("status");
   const approvalEl = document.getElementById("approval");
   const feedbackEl = document.getElementById("feedback");
+  const idleWarningEl = document.getElementById("idle-warning");
 
   const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   const wsURL = wsProtocol + "//" + window.location.host + "/ws/guest?guest_token=" + encodeURIComponent(guestToken);
@@ -42,10 +43,16 @@
     return bytes;
   }
 
+  function clearIdleWarning() {
+    idleWarningEl.textContent = "no idle timeout warning";
+    idleWarningEl.className = "";
+  }
+
   ws.addEventListener("open", function () {
     statusEl.textContent = "connected";
     feedbackEl.textContent = "connected to host";
     feedbackEl.className = "ok";
+    clearIdleWarning();
     term.write("\r\n[ AI WARDEN ] connected to host\r\n\r\n");
     term.focus();
   });
@@ -54,34 +61,48 @@
     const msg = JSON.parse(event.data);
     switch (msg.type) {
       case "host_output":
+        clearIdleWarning();
         term.write(base64ToBytes(msg.data_b64));
         break;
       case "approval_state":
+        clearIdleWarning();
         approvalEl.textContent = [msg.decision, msg.reason, msg.risk].filter(Boolean).join(" · ");
         approvalEl.className = msg.decision === "require_approval" ? "warn" : "";
         break;
       case "feedback":
+        clearIdleWarning();
         feedbackEl.textContent = msg.message || "";
         feedbackEl.className = "ok";
+        break;
+      case "idle_timeout_warning":
+        idleWarningEl.textContent = "session will close in " + msg.remaining_seconds + "s due to inactivity";
+        idleWarningEl.className = "warn";
+        break;
+      case "idle_timeout_warning_cleared":
+        clearIdleWarning();
         break;
       case "close":
         statusEl.textContent = "closed";
         feedbackEl.textContent = "session closed";
+        clearIdleWarning();
         break;
     }
   });
 
   ws.addEventListener("close", function () {
     statusEl.textContent = "closed";
+    clearIdleWarning();
   });
 
   ws.addEventListener("error", function () {
     statusEl.textContent = "error";
     feedbackEl.textContent = "websocket error";
+    clearIdleWarning();
   });
 
   term.onData(function (data) {
     if (ws.readyState !== WebSocket.OPEN) return;
+    clearIdleWarning();
     const bytes = new TextEncoder().encode(data);
     ws.send(JSON.stringify({ type: "guest_input", data_b64: bytesToBase64(bytes) }));
   });

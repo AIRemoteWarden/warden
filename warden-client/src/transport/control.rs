@@ -9,6 +9,8 @@ struct CreateSessionRequest {
     readonly: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     idle_timeout_seconds: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    idle_warning_seconds: Option<u64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -18,6 +20,7 @@ struct CreateSessionResponse {
     guest_url: String,
     relay_url: Option<String>,
     idle_timeout_seconds: Option<u64>,
+    idle_warning_seconds: Option<u64>,
 }
 
 pub async fn create_session(
@@ -30,6 +33,7 @@ pub async fn create_session(
         .json(&CreateSessionRequest {
             readonly: config.options.readonly,
             idle_timeout_seconds: config.options.idle_timeout_seconds,
+            idle_warning_seconds: config.options.idle_warning_seconds,
         })
         .send()
         .await
@@ -51,5 +55,6 @@ pub async fn create_session(
             .relay_url
             .unwrap_or_else(|| config.relay_base_url.clone()),
         idle_timeout_seconds: payload.idle_timeout_seconds,
+        idle_warning_seconds: payload.idle_warning_seconds,
     })
 }

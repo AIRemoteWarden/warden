@@ -154,6 +154,10 @@ impl AppRuntime {
                 self.transition(RuntimeState::Interactive)
             }
             RuntimeEvent::CommandReady(command) => self.handle_command_ready(command).await,
+            RuntimeEvent::IdleTimeoutWarning(warning) => {
+                self.ui.show_idle_timeout_warning(warning.remaining_seconds);
+                Ok(())
+            }
             RuntimeEvent::Resize(size) => self.apply_resize(size),
             RuntimeEvent::ShellExited(code) => self.shutdown(ShutdownReason::ShellExited(code)).await,
             RuntimeEvent::TransportClosed => self.shutdown(ShutdownReason::TransportClosed).await,
@@ -179,6 +183,10 @@ impl AppRuntime {
             }
             RuntimeEvent::ShellOutput(bytes) => self.forward_shell_output(bytes).await,
             RuntimeEvent::CommandReady(command) => self.handle_command_ready(command).await,
+            RuntimeEvent::IdleTimeoutWarning(warning) => {
+                self.ui.show_idle_timeout_warning(warning.remaining_seconds);
+                Ok(())
+            }
             RuntimeEvent::GuestJoined => {
                 self.session.guest_connected = true;
                 Ok(())
@@ -223,6 +231,10 @@ impl AppRuntime {
                 self.transport.send_guest_feedback("waiting for approval").await
             }
             RuntimeEvent::ShellOutput(bytes) => self.forward_shell_output(bytes).await,
+            RuntimeEvent::IdleTimeoutWarning(warning) => {
+                self.ui.show_idle_timeout_warning(warning.remaining_seconds);
+                Ok(())
+            }
             RuntimeEvent::AiAssessmentFinished(result) => {
                 let can_redact = self
                     .session
@@ -518,6 +530,7 @@ impl From<TransportEvent> for RuntimeEvent {
             TransportEvent::GuestJoined => RuntimeEvent::GuestJoined,
             TransportEvent::GuestLeft => RuntimeEvent::GuestLeft,
             TransportEvent::GuestInput(bytes) => RuntimeEvent::GuestInput(bytes),
+            TransportEvent::IdleTimeoutWarning(warning) => RuntimeEvent::IdleTimeoutWarning(warning),
             TransportEvent::RemoteClose | TransportEvent::TransportError => RuntimeEvent::TransportClosed,
         }
     }

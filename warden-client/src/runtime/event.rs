@@ -1,5 +1,6 @@
 use crate::platform::TerminalSize;
 use crate::terminal::CommandExecutionEvent;
+use crate::transport::IdleTimeoutWarning;
 
 #[derive(Debug)]
 pub enum RuntimeEvent {
@@ -10,6 +11,7 @@ pub enum RuntimeEvent {
     AiAssessmentFinished(std::result::Result<String, String>),
     GuestJoined,
     GuestLeft,
+    IdleTimeoutWarning(IdleTimeoutWarning),
     Resize(TerminalSize),
     CommandReady(CommandExecutionEvent),
     TransportClosed,

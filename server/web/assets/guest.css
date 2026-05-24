@@ -114,7 +114,8 @@ main {
 }
 
 #approval,
-#feedback {
+#feedback,
+#idle-warning {
   color: var(--fg);
   min-height: 20px;
 }
@@ -125,6 +126,10 @@ main {
 
 #feedback.ok {
   color: var(--ok);
+}
+
+#idle-warning.warn {
+  color: var(--warn);
 }
 
 @media (max-width: 960px) {
