@@ -511,6 +511,11 @@ a {
 
 .article-dek {
   margin: 18px 0 0;
+  max-width: 62ch;
+  font-size: 0.94rem;
+  line-height: 1.7;
+  font-weight: 500;
+  letter-spacing: 0.01em;
 }
 
 .article-section {
