@@ -3,16 +3,50 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Warden | Debug Together, Without Sharing SSH</title>
+  <title>Warden | Secure Terminal Support Without SSH Handoff</title>
   <meta
     name="description"
-    content="Warden is remote terminal help without SSH handoff. Debug together in the browser while the host stays in control.">
+    content="Secure terminal support without SSH handoff. Guests join in the browser, hosts stay in control, and risky commands can require approval.">
+  <meta name="robots" content="index,follow">
+  <link rel="canonical" href="https://remotewarden.vercel.com/">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Warden | Secure Terminal Support Without SSH Handoff">
+  <meta property="og:description" content="Secure terminal support without SSH handoff. Guests join in the browser, hosts stay in control, and risky commands can require approval.">
+  <meta property="og:url" content="https://remotewarden.vercel.com/">
+  <meta property="og:image" content="https://remotewarden.vercel.com/warden-demo-poster.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Warden | Secure Terminal Support Without SSH Handoff">
+  <meta name="twitter:description" content="Secure terminal support without SSH handoff. Guests join in the browser, hosts stay in control, and risky commands can require approval.">
+  <meta name="twitter:image" content="https://remotewarden.vercel.com/warden-demo-poster.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
     href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;700&display=swap"
     rel="stylesheet">
   <link rel="stylesheet" href="./styles.css">
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "name": "Warden",
+          "url": "https://remotewarden.vercel.com/",
+          "sameAs": [
+            "https://github.com/AIRemoteWarden/warden"
+          ]
+        },
+        {
+          "@type": "SoftwareApplication",
+          "name": "Warden",
+          "applicationCategory": "DeveloperApplication",
+          "operatingSystem": "Linux, macOS, Web",
+          "description": "Warden provides secure terminal support without SSH handoff. Hosts start a local session, guests join in the browser, and risky commands can require approval.",
+          "url": "https://remotewarden.vercel.com/"
+        }
+      ]
+    }
+  </script>
 </head>
 <body>
   <div class="page-shell">
@@ -24,6 +58,7 @@
       <nav class="site-nav" aria-label="Primary">
         <a href="#why">Why</a>
         <a href="#workflow">How It Works</a>
+        <a href="./resources/">Resources</a>
         <a href="#faq">FAQ</a>
         <a href="https://github.com/AIRemoteWarden/warden">GitHub</a>
       </nav>
@@ -32,16 +67,19 @@
 
     <main id="top">
       <section class="hero">
-        <div class="hero-copy">
+        <div class="hero-intro">
           <div class="eyebrow">Terminal support without permanent access</div>
-          <h1>Debug together, without sharing SSH.</h1>
-          <p class="hero-text">A shared terminal for support and debugging. Guests join in the browser. Hosts stay in control.</p>
+          <h1>Secure terminal support, without SSH handoff.</h1>
+        </div>
+
+        <div class="hero-copy">
+          <p class="hero-text">Warden is a temporary SSH access alternative for remote terminal support. Guests join in the browser, hosts stay in control, and risky commands can require approval.</p>
           <div class="hero-actions">
             <a class="button button-primary" href="https://forms.gle/9SvjdmgCitrLMA9J7">Get Early Access</a>
-            <a class="button button-secondary" href="#demo">See the Workflow</a>
+            <a class="button button-secondary" href="./resources/temporary-ssh-access-alternative.html">See the SSH Alternative</a>
           </div>
           <ul class="signal-list" aria-label="Core product signals">
-            <li>No SSH handoff</li>
+            <li>No SSH handoff or shared keys</li>
             <li>No VPN setup</li>
             <li>Host approval for risky commands</li>
             <li>Bring your trusted LLM for risk assessment</li>
@@ -66,7 +104,7 @@
 
       <section class="trust-strip" aria-label="Quick positioning statements">
         <div>Faster than pasted logs</div>
-        <div>Safer than shared SSH</div>
+        <div>Safer than temporary SSH credentials</div>
         <div>Better than screen share for terminal work</div>
       </section>
 
@@ -85,7 +123,7 @@
           <article class="info-card">
             <h3>SSH is often too much, too early</h3>
             <p>
-              Many support sessions do not justify new accounts, shared keys, or VPN access.
+              Many support sessions do not justify temporary SSH accounts, shared keys, or VPN access just to debug one issue.
             </p>
           </article>
           <article class="info-card">
@@ -103,6 +141,40 @@
         </div>
       </section>
 
+      <section class="comparison-section" id="comparison">
+        <div class="section-heading">
+          <div class="eyebrow">Alternative to SSH</div>
+          <h2>When users ask for temporary SSH access, they usually want one thing.</h2>
+        </div>
+        <div class="comparison-table" aria-label="Comparison of support workflows">
+          <div class="comparison-row comparison-header">
+            <div>Need</div>
+            <div>Temporary SSH Access</div>
+            <div>Warden</div>
+          </div>
+          <div class="comparison-row">
+            <div>Let an expert work in a real shell</div>
+            <div>Yes, but with direct shell access</div>
+            <div class="comparison-highlight">Yes, through a browser session under host control</div>
+          </div>
+          <div class="comparison-row">
+            <div>Keep access short-lived</div>
+            <div>Possible, but still needs account or key handling</div>
+            <div class="comparison-highlight">Built around temporary guest sessions</div>
+          </div>
+          <div class="comparison-row">
+            <div>Avoid SSH key exchange and VPN setup</div>
+            <div>No</div>
+            <div class="comparison-highlight">Yes</div>
+          </div>
+          <div class="comparison-row">
+            <div>Approve risky commands before they run</div>
+            <div>Usually no</div>
+            <div class="comparison-highlight">Yes</div>
+          </div>
+        </div>
+      </section>
+
       <section class="workflow-section" id="workflow">
         <div class="section-heading narrow">
           <div class="eyebrow">How it works</div>
@@ -113,7 +185,7 @@
             <span class="step-index">01</span>
             <h3>Host starts a session locally</h3>
             <p>
-              Start a fresh terminal session and generate a temporary guest link.
+              Start a fresh terminal session locally and generate a temporary guest link.
             </p>
           </article>
           <article class="step-card">
@@ -138,6 +210,14 @@
           <h2>FAQ</h2>
         </div>
         <div class="faq-list">
+          <article class="faq-item">
+            <h3>What is a temporary SSH access alternative?</h3>
+            <p>It is a way to let someone help in a shell session without giving them direct SSH credentials, a permanent account, or a shared private key.</p>
+          </article>
+          <article class="faq-item">
+            <h3>Is Warden the same as temporary SSH access?</h3>
+            <p>No. Warden is an alternative to temporary SSH access. The goal is the same, which is short-term terminal collaboration, but the workflow keeps the host in control and avoids SSH handoff.</p>
+          </article>
           <article class="faq-item">
             <h3>Why not just use SSH?</h3>
             <p>Because the real problem is usually not access. It is the trust cost of giving direct shell access to someone outside your team.</p>
@@ -166,11 +246,11 @@
           <div class="eyebrow">Early access</div>
           <h2>Apply for early access.</h2>
           <p>
-            If you regularly help customers debug Linux, Docker, Postgres, systemd, or self-hosted services, we want to hear from you.
+            If you regularly help customers debug Linux, Docker, Postgres, systemd, or self-hosted services, and you need a safer alternative to temporary SSH access, we want to hear from you.
           </p>
           <div class="cta-actions">
             <a class="button button-primary" href="https://forms.gle/9SvjdmgCitrLMA9J7">Get Early Access</a>
-            <a class="button button-secondary" href="https://github.com/AIRemoteWarden/warden">View the Repository</a>
+            <a class="button button-secondary" href="./resources/">Browse Resources</a>
           </div>
         </div>
       </section>

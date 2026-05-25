@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Temporary SSH Access Alternative | Warden Resources</title>
+  <meta
+    name="description"
+    content="A practical guide to alternatives to temporary SSH access for remote terminal support, vendor debugging, and short-lived shell collaboration.">
+  <meta name="robots" content="index,follow">
+  <link rel="canonical" href="https://remotewarden.vercel.com/resources/temporary-ssh-access-alternative.html">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Temporary SSH Access Alternative | Warden Resources">
+  <meta property="og:description" content="A practical guide to alternatives to temporary SSH access for remote terminal support, vendor debugging, and short-lived shell collaboration.">
+  <meta property="og:url" content="https://remotewarden.vercel.com/resources/temporary-ssh-access-alternative.html">
+  <meta property="og:image" content="https://remotewarden.vercel.com/warden-demo-poster.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Temporary SSH Access Alternative | Warden Resources">
+  <meta name="twitter:description" content="A practical guide to alternatives to temporary SSH access for remote terminal support, vendor debugging, and short-lived shell collaboration.">
+  <meta name="twitter:image" content="https://remotewarden.vercel.com/warden-demo-poster.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;700&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="../styles.css">
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Article",
+          "headline": "Temporary SSH Access Alternative",
+          "description": "A practical guide to alternatives to temporary SSH access for remote terminal support, vendor debugging, and short-lived shell collaboration.",
+          "url": "https://remotewarden.vercel.com/resources/temporary-ssh-access-alternative.html",
+          "author": {
+            "@type": "Organization",
+            "name": "Warden"
+          },
+          "publisher": {
+            "@type": "Organization",
+            "name": "Warden"
+          }
+        },
+        {
+          "@type": "BreadcrumbList",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Resources",
+              "item": "https://remotewarden.vercel.com/resources/"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Temporary SSH Access Alternative",
+              "item": "https://remotewarden.vercel.com/resources/temporary-ssh-access-alternative.html"
+            }
+          ]
+        },
+        {
+          "@type": "SoftwareApplication",
+          "name": "Warden",
+          "applicationCategory": "DeveloperApplication",
+          "operatingSystem": "Linux, macOS, Web",
+          "description": "Warden provides secure terminal support without SSH handoff. Hosts start a local session, guests join in the browser, and risky commands can require approval.",
+          "url": "https://remotewarden.vercel.com/"
+        }
+      ]
+    }
+  </script>
+</head>
+<body>
+  <div class="page-shell">
+    <header class="site-header">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">W</span>
+        <span>Warden</span>
+      </a>
+      <nav class="site-nav" aria-label="Primary">
+        <a href="../index.html">Home</a>
+        <a href="./">Resources</a>
+        <a href="https://github.com/AIRemoteWarden/warden">GitHub</a>
+      </nav>
+      <a class="nav-cta" href="https://forms.gle/9SvjdmgCitrLMA9J7">Get Early Access</a>
+    </header>
+
+    <main id="top">
+      <article class="article-shell">
+        <header class="article-header">
+          <div class="eyebrow">Resources</div>
+          <h1>Temporary SSH Access Alternative</h1>
+          <p class="article-dek">Teams often search for temporary SSH access when what they really need is short-term terminal collaboration. This guide explains where that distinction matters and why a browser-based workflow can be the better fit.</p>
+        </header>
+
+        <section class="article-section">
+          <p>Temporary SSH access sounds precise, but in many support situations it is only a proxy for the real request: "someone needs to help me debug this machine right now." That difference matters because the workflow you choose affects not just access, but trust, review, and operational overhead.</p>
+          <p>If the goal is a short-lived support session, direct SSH credentials are often broader than necessary. They solve connection, but they do not solve the question of how much control the host wants to retain while the session is active.</p>
+        </section>
+
+        <section class="article-section" id="comparison">
+          <h2>Why teams ask for temporary SSH access</h2>
+          <p>In practice, teams usually reach for temporary SSH access in one of these situations:</p>
+          <ul class="article-list">
+            <li>A customer environment is failing and an outside expert needs to inspect it live.</li>
+            <li>A vendor or consultant needs shell access for a narrow debugging task.</li>
+            <li>An internal engineer wants help from a teammate but does not want to grant a long-lived account.</li>
+          </ul>
+          <p>Those are all legitimate needs. The issue is that SSH is optimized for direct administrative access, not necessarily for collaborative support with active host oversight.</p>
+        </section>
+
+        <section class="article-section">
+          <h2>Where temporary SSH access creates friction</h2>
+          <p>Even when credentials are short-lived, the workflow still tends to come with setup and policy work: account creation, SSH key handling, firewall or VPN rules, audit questions, and cleanup afterward. That overhead may be acceptable for ongoing admin work, but it can feel heavy for a single support session.</p>
+          <p>Screen sharing is the opposite extreme. It avoids credential exchange, but it is usually inefficient for terminal work because only one person can really operate at a time.</p>
+        </section>
+
+        <section class="article-section">
+          <h2>What a browser-based alternative changes</h2>
+          <p>A browser-based terminal support workflow targets the middle ground. The guest gets live access to the session they need, but the host remains present and can retain more control over how that access is used.</p>
+          <div class="article-callout">
+            <p>Warden is built around that middle ground: the host starts a local session, the guest joins in the browser, and risky commands can require approval before they run.</p>
+          </div>
+        </section>
+
+        <section class="article-section">
+          <h2>Side-by-side comparison</h2>
+          <div class="article-table" aria-label="Comparison of support options">
+            <div class="comparison-row comparison-header">
+              <div>Workflow</div>
+              <div>Temporary SSH Access</div>
+              <div>Warden</div>
+            </div>
+            <div class="comparison-row">
+              <div>How the guest joins</div>
+              <div>SSH client, account, key, or password</div>
+              <div class="comparison-highlight">Browser link</div>
+            </div>
+            <div class="comparison-row">
+              <div>Host keeps a local presence</div>
+              <div>Optional</div>
+              <div class="comparison-highlight">Yes</div>
+            </div>
+            <div class="comparison-row">
+              <div>Risky command approval</div>
+              <div>Usually not built in</div>
+              <div class="comparison-highlight">Built in to the workflow</div>
+            </div>
+            <div class="comparison-row">
+              <div>Operational overhead</div>
+              <div>New accounts, SSH key handling, VPN rules, or firewall changes</div>
+              <div class="comparison-highlight">Temporary session link and local host agent</div>
+            </div>
+            <div class="comparison-row">
+              <div>Best fit</div>
+              <div>Full shell delegation</div>
+              <div class="comparison-highlight">Collaborative debugging with tighter control</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="article-section">
+          <h2>When SSH still makes sense</h2>
+          <p>SSH is still the right tool when you truly need direct administration, automation, or persistent access. The point is not that SSH is wrong. The point is that not every debugging session needs the full SSH model.</p>
+        </section>
+
+        <section class="article-section" id="faq">
+          <h2>FAQ</h2>
+          <h3>Is Warden SSH?</h3>
+          <p>No. Warden is an alternative to temporary SSH access for support scenarios where you want shell collaboration without handing over SSH credentials.</p>
+          <h3>Is this better than temporary SSH accounts?</h3>
+          <p>For collaborative debugging, often yes. You avoid account creation and key exchange, while still letting the expert work inside a real shell.</p>
+          <h3>Can I use Warden with vendors or outside consultants?</h3>
+          <p>Yes. That is one of the primary use cases: outside help for a narrow support task without broad direct access.</p>
+          <h3>Can I self-host it?</h3>
+          <p>Yes. Warden is designed to support self-hosted deployments for teams that want to run it in their own environment.</p>
+        </section>
+
+        <footer class="article-footer">
+          <p>If your team keeps reaching for temporary SSH access just to debug one issue, the better question may be whether you need SSH at all for that workflow.</p>
+          <div class="article-footer-actions">
+            <a class="button button-primary" href="https://forms.gle/9SvjdmgCitrLMA9J7">Get Early Access</a>
+            <a class="button button-secondary" href="./">More Resources</a>
+          </div>
+        </footer>
+      </article>
+    </main>
+  </div>
+</body>
+</html>
