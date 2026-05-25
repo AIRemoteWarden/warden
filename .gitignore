@@ -30,6 +30,7 @@ go.work.sum
 
 # env file
 .env
+push.sh
 
 # Editor/IDE
 # .idea/
