@@ -100,8 +100,9 @@ Or run it remotely:
 curl -fsSL https://raw.githubusercontent.com/AIRemoteWarden/warden/main/deploy/install-podman-server.sh | sh -s -- YOUR_PUBLIC_HOST_OR_IP v0.1.1
 ```
 
-This starts both `warden-server` and `caddy`, configures Caddy with `tls internal`, and prints a verification command plus log commands when it finishes.
-When running with rootless Podman, the script defaults to `8080/8443` instead of privileged ports `80/443`.
+If you pass a DNS name, the script starts both `warden-server` and `caddy`, configures Caddy with `tls internal`, and prints a verification command plus log commands when it finishes.
+If you pass a public IP address, the script skips Caddy and deploys `warden-server` over plain HTTP so quick-start installs remain reliable.
+When running with rootless Podman, the script defaults to `8080/8443` instead of privileged ports `80/443` for the TLS path.
 
 Create a shared network:
 

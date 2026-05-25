@@ -18,6 +18,7 @@ IMAGE="ghcr.io/ai-remote-warden/warden-server:${TAG}"
 CADDY_IMAGE="docker.io/library/caddy:2"
 CONFIG_DIR="${WARDEN_CONFIG_DIR:-/tmp/warden-deploy}"
 CADDYFILE="${CONFIG_DIR}/Caddyfile"
+USE_TLS_INTERNAL="yes"
 
 if [ "${WARDEN_HTTP_PORT:-}" != "" ]; then
   HTTP_PORT="${WARDEN_HTTP_PORT}"
@@ -35,11 +36,28 @@ else
   HTTPS_PORT="8443"
 fi
 
-PUBLIC_HOST="https://${HOST}"
-VERIFY_HOST="${HOST}"
-if [ "${HTTPS_PORT}" != "443" ]; then
-  PUBLIC_HOST="${PUBLIC_HOST}:${HTTPS_PORT}"
-  VERIFY_HOST="${VERIFY_HOST}:${HTTPS_PORT}"
+case "${HOST}" in
+  *[!0-9.]* | *.*.*.*.* | "")
+    ;;
+  *.*.*.*)
+    USE_TLS_INTERNAL="no"
+    ;;
+esac
+
+if [ "${USE_TLS_INTERNAL}" = "yes" ]; then
+  PUBLIC_HOST="https://${HOST}"
+  VERIFY_HOST="${HOST}"
+  if [ "${HTTPS_PORT}" != "443" ]; then
+    PUBLIC_HOST="${PUBLIC_HOST}:${HTTPS_PORT}"
+    VERIFY_HOST="${VERIFY_HOST}:${HTTPS_PORT}"
+  fi
+else
+  PUBLIC_HOST="http://${HOST}"
+  VERIFY_HOST="${HOST}"
+  if [ "${HTTP_PORT}" != "80" ]; then
+    PUBLIC_HOST="${PUBLIC_HOST}:${HTTP_PORT}"
+    VERIFY_HOST="${VERIFY_HOST}:${HTTP_PORT}"
+  fi
 fi
 
 if ! command -v podman >/dev/null 2>&1; then
@@ -49,47 +67,69 @@ fi
 
 mkdir -p "${CONFIG_DIR}"
 
-cat > "${CADDYFILE}" <<EOF
+podman pull "${IMAGE}"
+podman rm -f "${CADDY_NAME}" "${SERVER_NAME}" >/dev/null 2>&1 || true
+
+if [ "${USE_TLS_INTERNAL}" = "yes" ]; then
+  cat > "${CADDYFILE}" <<EOF
 ${HOST} {
 	tls internal
 	reverse_proxy ${SERVER_NAME}:8080
 }
 EOF
 
-if ! podman network exists "${NETWORK}"; then
-  podman network create "${NETWORK}"
+  if ! podman network exists "${NETWORK}"; then
+    podman network create "${NETWORK}"
+  fi
+
+  podman pull "${CADDY_IMAGE}"
+
+  podman run --replace -d \
+    --name "${SERVER_NAME}" \
+    --network "${NETWORK}" \
+    --network-alias "${SERVER_NAME}" \
+    -e WARDEN_CONTROL_ADDR=:8080 \
+    -e WARDEN_PUBLIC_HOST="${PUBLIC_HOST}" \
+    -e WARDEN_SESSION_IDLE_TIMEOUT_SECONDS="${IDLE_TIMEOUT}" \
+    -e WARDEN_SESSION_MAX_IDLE_TIMEOUT_SECONDS="${MAX_IDLE_TIMEOUT}" \
+    -e WARDEN_SESSION_IDLE_WARNING_SECONDS="${IDLE_WARNING}" \
+    "${IMAGE}"
+
+  podman run --replace -d \
+    --name "${CADDY_NAME}" \
+    --network "${NETWORK}" \
+    -p "${HTTP_PORT}:80" \
+    -p "${HTTPS_PORT}:443" \
+    -v "${CADDYFILE}:/etc/caddy/Caddyfile:ro" \
+    -v caddy_data:/data \
+    -v caddy_config:/config \
+    "${CADDY_IMAGE}"
+
+  echo "Warden server started with Caddy TLS."
+  echo "Host: ${PUBLIC_HOST}"
+  echo "Image: ${IMAGE}"
+  echo "Verify: curl -k https://${VERIFY_HOST}/v1/policy/default"
+  echo "Logs:"
+  echo "  podman logs -f ${SERVER_NAME}"
+  echo "  podman logs -f ${CADDY_NAME}"
+else
+  podman run --replace -d \
+    --name "${SERVER_NAME}" \
+    -p "${HTTP_PORT}:8080" \
+    -e WARDEN_CONTROL_ADDR=:8080 \
+    -e WARDEN_PUBLIC_HOST="${PUBLIC_HOST}" \
+    -e WARDEN_SESSION_IDLE_TIMEOUT_SECONDS="${IDLE_TIMEOUT}" \
+    -e WARDEN_SESSION_MAX_IDLE_TIMEOUT_SECONDS="${MAX_IDLE_TIMEOUT}" \
+    -e WARDEN_SESSION_IDLE_WARNING_SECONDS="${IDLE_WARNING}" \
+    "${IMAGE}"
+
+  echo "WARNING: ${HOST} looks like an IP address, so the quick-start deployment is using plain HTTP."
+  echo "WARNING: Traffic is not encrypted. Use this only for testing or private networks."
+  echo "WARNING: To enable HTTPS, redeploy with a DNS name instead of an IP address."
+  echo "Warden server started."
+  echo "Host: ${PUBLIC_HOST}"
+  echo "Image: ${IMAGE}"
+  echo "Verify: curl ${PUBLIC_HOST}/v1/policy/default"
+  echo "Logs:"
+  echo "  podman logs -f ${SERVER_NAME}"
 fi
-
-podman pull "${IMAGE}"
-podman pull "${CADDY_IMAGE}"
-
-podman rm -f "${CADDY_NAME}" "${SERVER_NAME}" >/dev/null 2>&1 || true
-
-podman run --replace -d \
-  --name "${SERVER_NAME}" \
-  --network "${NETWORK}" \
-  --network-alias "${SERVER_NAME}" \
-  -e WARDEN_CONTROL_ADDR=:8080 \
-  -e WARDEN_PUBLIC_HOST="${PUBLIC_HOST}" \
-  -e WARDEN_SESSION_IDLE_TIMEOUT_SECONDS="${IDLE_TIMEOUT}" \
-  -e WARDEN_SESSION_MAX_IDLE_TIMEOUT_SECONDS="${MAX_IDLE_TIMEOUT}" \
-  -e WARDEN_SESSION_IDLE_WARNING_SECONDS="${IDLE_WARNING}" \
-  "${IMAGE}"
-
-podman run --replace -d \
-  --name "${CADDY_NAME}" \
-  --network "${NETWORK}" \
-  -p "${HTTP_PORT}:80" \
-  -p "${HTTPS_PORT}:443" \
-  -v "${CADDYFILE}:/etc/caddy/Caddyfile:ro" \
-  -v caddy_data:/data \
-  -v caddy_config:/config \
-  "${CADDY_IMAGE}"
-
-echo "Warden server started."
-echo "Host: ${PUBLIC_HOST}"
-echo "Image: ${IMAGE}"
-echo "Verify: curl -k https://${VERIFY_HOST}/v1/policy/default"
-echo "Logs:"
-echo "  podman logs -f ${SERVER_NAME}"
-echo "  podman logs -f ${CADDY_NAME}"
