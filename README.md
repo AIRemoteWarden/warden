@@ -101,6 +101,7 @@ curl -fsSL https://raw.githubusercontent.com/AIRemoteWarden/warden/main/deploy/i
 ```
 
 This starts both `warden-server` and `caddy`, configures Caddy with `tls internal`, and prints a verification command plus log commands when it finishes.
+When running with rootless Podman, the script defaults to `8080/8443` instead of privileged ports `80/443`.
 
 Create a shared network:
 
