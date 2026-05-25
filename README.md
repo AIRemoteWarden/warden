@@ -155,32 +155,36 @@ Notes:
 
 ## Run the client
 
-Build and start the host client:
+Run the released host client binary:
 
 ```bash
-cd warden-client
-cargo run -- start --server YOUR_SERVER_HOST
+warden-client start --server YOUR_SERVER_HOST
 ```
+
+If you deployed the server with a public IP and no TLS, connect the client to the plain HTTP endpoint:
+
+```bash
+warden-client start --server http://YOUR_SERVER_IP:8080
+```
+
+Do not use `https://` or `--insecure` for that HTTP flow.
 
 If you are running the server behind Caddy with `tls internal`, connect the client to the HTTPS endpoint:
 
 ```bash
-cd warden-client
-cargo run -- start --server https://YOUR_SERVER_HOST:8443
+warden-client start --server https://YOUR_SERVER_HOST:8443
 ```
 
 For that HTTPS flow to work, the machine running the client must already trust Caddy's internal root CA certificate. For local WSL testing, the simplest path is usually:
 
 ```bash
-cd warden-client
-cargo run -- start --server https://localhost:8443 --insecure
+warden-client start --server https://localhost:8443 --insecure
 ```
 
 If you want `ask ai` to use an OpenAI-compatible local model server such as `llama.cpp`, pass `--llm`:
 
 ```bash
-cd warden-client
-cargo run -- start --server YOUR_SERVER_HOST --llm localhost:9001
+warden-client start --server YOUR_SERVER_HOST --llm localhost:9001
 ```
 
 `--llm localhost:9001` is normalized to `http://localhost:9001/v1`.

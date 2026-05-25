@@ -119,8 +119,8 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist/warden-linux-amd64
-          cp warden-client/target/release/warden dist/warden-linux-amd64/warden
-          chmod +x dist/warden-linux-amd64/warden
+          cp warden-client/target/release/warden dist/warden-linux-amd64/warden-client
+          chmod +x dist/warden-linux-amd64/warden-client
           tar -C dist -czf warden-linux-amd64.tar.gz warden-linux-amd64
 
       - name: Upload Linux client to release
