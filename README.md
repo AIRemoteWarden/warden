@@ -88,6 +88,20 @@ podman run --replace -it \
 
 If you are running inside WSL, the most reliable local HTTPS setup we found is to run two Podman containers manually on the same Podman network instead of relying on `podman-compose`.
 
+For a quicker setup on any Linux machine with Podman installed, you can use the deploy script directly:
+
+```bash
+sh deploy/install-podman-server.sh YOUR_PUBLIC_HOST_OR_IP v0.1.1
+```
+
+Or run it remotely:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/AIRemoteWarden/warden/main/deploy/install-podman-server.sh | sh -s -- YOUR_PUBLIC_HOST_OR_IP v0.1.1
+```
+
+This starts both `warden-server` and `caddy`, configures Caddy with `tls internal`, and prints a verification command plus log commands when it finishes.
+
 Create a shared network:
 
 ```bash
