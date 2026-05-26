@@ -425,14 +425,14 @@ a {
 }
 
 .resource-home {
-  padding: 72px 0 28px;
+  padding: 56px 0 18px;
 }
 
 .resource-home h1 {
   margin: 0;
-  font-size: clamp(2rem, 5vw, 3.4rem);
+  font-size: clamp(1.5rem, 3vw, 2rem);
   letter-spacing: -0.03em;
-  line-height: 1.05;
+  line-height: 1.15;
 }
 
 .resource-home p,
