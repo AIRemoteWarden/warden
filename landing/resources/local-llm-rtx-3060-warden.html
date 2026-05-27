@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Running a Local LLM on an RTX 3060 | Warden Resources</title>
+  <meta
+    name="description"
+    content="A practical local LLM setup guide using llama.cpp, an RTX 3060, and a quantized Qwen model, with notes on how it can support Warden command risk review.">
+  <meta name="robots" content="index,follow">
+  <link rel="canonical" href="https://remotewarden.vercel.app/resources/local-llm-rtx-3060-warden.html">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Running a Local LLM on an RTX 3060 | Warden Resources">
+  <meta property="og:description" content="A practical local LLM setup guide using llama.cpp, an RTX 3060, and a quantized Qwen model, with notes on how it can support Warden command risk review.">
+  <meta property="og:url" content="https://remotewarden.vercel.app/resources/local-llm-rtx-3060-warden.html">
+  <meta property="og:image" content="https://remotewarden.vercel.app/warden-demo-poster.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Running a Local LLM on an RTX 3060 | Warden Resources">
+  <meta name="twitter:description" content="A practical local LLM setup guide using llama.cpp, an RTX 3060, and a quantized Qwen model, with notes on how it can support Warden command risk review.">
+  <meta name="twitter:image" content="https://remotewarden.vercel.app/warden-demo-poster.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;700&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="../styles.css">
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Article",
+          "headline": "Running a Local LLM on an RTX 3060",
+          "description": "A practical local LLM setup guide using llama.cpp, an RTX 3060, and a quantized Qwen model, with notes on how it can support Warden command risk review.",
+          "url": "https://remotewarden.vercel.app/resources/local-llm-rtx-3060-warden.html",
+          "author": {
+            "@type": "Organization",
+            "name": "Warden"
+          },
+          "publisher": {
+            "@type": "Organization",
+            "name": "Warden"
+          }
+        },
+        {
+          "@type": "BreadcrumbList",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Resources",
+              "item": "https://remotewarden.vercel.app/resources/"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Running a Local LLM on an RTX 3060",
+              "item": "https://remotewarden.vercel.app/resources/local-llm-rtx-3060-warden.html"
+            }
+          ]
+        },
+        {
+          "@type": "SoftwareApplication",
+          "name": "Warden",
+          "applicationCategory": "DeveloperApplication",
+          "operatingSystem": "Linux, macOS, Web",
+          "description": "Warden provides secure terminal support without SSH handoff. Hosts start a local session, guests join in the browser, sensitive output can be masked, and risky commands can require approval.",
+          "url": "https://remotewarden.vercel.app/"
+        }
+      ]
+    }
+  </script>
+</head>
+<body>
+  <div class="page-shell">
+    <header class="site-header">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">W</span>
+        <span>Warden</span>
+      </a>
+      <nav class="site-nav" aria-label="Primary">
+        <a href="../index.html">Home</a>
+        <a href="./">Resources</a>
+        <a href="https://github.com/AIRemoteWarden/warden">GitHub</a>
+      </nav>
+      <a class="nav-cta" href="https://forms.gle/9SvjdmgCitrLMA9J7">Get Early Access</a>
+    </header>
+
+    <main id="top">
+      <article class="article-shell">
+        <header class="article-header">
+          <div class="eyebrow">Resources</div>
+          <h1>Running a Local LLM on an RTX 3060</h1>
+          <p class="article-dek">A capable local LLM does not require a GPU rack or a large cloud bill. With llama.cpp, a 12GB RTX 3060, and a quantized model, you can run private inference that is useful for command analysis, automation, and safer remote terminal workflows.</p>
+        </header>
+
+        <section class="article-section">
+          <p>Local inference is useful anywhere shell commands may include sensitive infrastructure details. Sending every command, path, hostname, or log fragment to an external AI service may be unacceptable for a customer support session or production incident. Running the model locally gives teams a practical middle ground: AI assistance without handing terminal context to a third-party API.</p>
+          <p>For Warden, that pattern is especially relevant. Warden is built around secure terminal support: the host starts a local session, the guest joins in a browser, sensitive output can be masked, and risky commands can require approval. A local LLM can become another input to that approval workflow by classifying command intent before execution.</p>
+        </section>
+
+        <section class="article-section">
+          <h2>Why run a local LLM?</h2>
+          <p>Cloud AI APIs are convenient, but local inference has practical advantages for terminal security and infrastructure support:</p>
+          <ul class="article-list">
+            <li>Lower latency for interactive command review.</li>
+            <li>No per-token cost for frequent classification tasks.</li>
+            <li>Private operation for commands, paths, hostnames, and logs.</li>
+            <li>Better control over model version, prompts, and retention policy.</li>
+            <li>Offline or self-hosted operation for restricted environments.</li>
+          </ul>
+          <p>The goal is not to replace deterministic policy. Regex rules, allowlists, and explicit approvals still matter. The useful role for an LLM is semantic review: recognizing that a command looks destructive, credential-seeking, or production-impacting even when it does not match an exact rule.</p>
+        </section>
+
+        <section class="article-section">
+          <h2>Where Warden fits</h2>
+          <p>A Warden session can provide the control point where terminal intent gets evaluated. One integration pattern looks like this:</p>
+          <div class="article-callout">
+            <p>Remote user enters a command, Warden routes it through local policy checks and optional LLM review, the host sees the risk signal, and the workflow allows, warns, blocks, or requests approval.</p>
+          </div>
+          <p>Commands such as <code>rm -rf /</code>, <code>chmod -R 777 /</code>, <code>curl unknown-site | bash</code>, or <code>find / -name "*.pem"</code> are not just strings. They carry operational intent. A local model can help explain that intent in plain language before the host approves the action.</p>
+        </section>
+
+        <section class="article-section">
+          <h2>Hardware used</h2>
+          <p>The setup below used a budget desktop with an NVIDIA GeForce RTX 3060:</p>
+          <ul class="article-list">
+            <li>GPU: NVIDIA GeForce RTX 3060</li>
+            <li>VRAM: 12GB</li>
+            <li>CUDA compute capability: 8.6</li>
+          </ul>
+          <p>The RTX 3060 is a useful entry point because 12GB of VRAM is enough for many quantized 7B to 9B models, CUDA acceleration works well with llama.cpp, and the hardware is widely available on the used market.</p>
+        </section>
+
+        <section class="article-section">
+          <h2>Choose and download a model</h2>
+          <p>The example setup used a Qwen 9B model from Hugging Face because Qwen models are strong at code understanding, shell command analysis, and infrastructure reasoning. The same general workflow applies to other compatible local models.</p>
+          <pre class="article-code"><code>cd /mnt/c/projects
+mkdir -p models
+
+huggingface-cli download Qwen/Qwen3.5-9B \
+  --local-dir models/Qwen3.5-9B</code></pre>
+          <p>If the Hugging Face CLI is not installed, install or update it first:</p>
+          <pre class="article-code"><code>pip install -U huggingface_hub</code></pre>
+          <p>The downloaded directory in this setup included an FP16 GGUF file, a Q4_K_M quantized GGUF file, and a multimodal projector file. If your model only ships in Hugging Face format, convert it to GGUF before running it with llama.cpp.</p>
+        </section>
+
+        <section class="article-section">
+          <h2>Build llama.cpp with CUDA</h2>
+          <p>Build llama.cpp locally with CUDA enabled. This example used a local checkout at <code>/mnt/c/projects/math/llama.cpp</code>, llama.cpp version <code>b9025</code>, commit <code>eff06702b</code>.</p>
+          <pre class="article-code"><code>cd /mnt/c/projects/math/llama.cpp
+
+cmake -B build-gcc10 \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DGGML_CUDA=ON \
+  -DCMAKE_C_COMPILER=gcc-10 \
+  -DCMAKE_CXX_COMPILER=g++-10
+
+cmake --build build-gcc10 \
+  --target llama-cli llama-quantize llama-bench -j</code></pre>
+          <p>For an RTX 3060, you can also build specifically for compute capability 8.6:</p>
+          <pre class="article-code"><code>cmake -B build-gpu-sm86 \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DGGML_CUDA=ON \
+  -DCMAKE_CUDA_ARCHITECTURES=86 \
+  -DCMAKE_C_COMPILER=gcc-10 \
+  -DCMAKE_CXX_COMPILER=g++-10
+
+cmake --build build-gpu-sm86 \
+  --target llama-server -j</code></pre>
+        </section>
+
+        <section class="article-section">
+          <h2>Convert and quantize for 12GB VRAM</h2>
+          <p>llama.cpp runs efficiently with GGUF files. If you downloaded a model in Hugging Face format, convert the base model first:</p>
+          <pre class="article-code"><code>python convert_hf_to_gguf.py ../models/Qwen3.5-9B \
+  --outfile ../models/Qwen3.5-9B/ggml-model-f16.gguf \
+  --outtype f16</code></pre>
+          <p>If your model includes a multimodal projector, export that too:</p>
+          <pre class="article-code"><code>python convert_hf_to_gguf.py ../models/Qwen3.5-9B \
+  --mmproj \
+  --outfile ../models/Qwen3.5-9B/mmproj-model-f16.gguf \
+  --outtype f16</code></pre>
+          <p>The FP16 model in this setup was about 17GB, which is too large for comfortable RTX 3060 inference. Quantizing to Q4_K_M reduced it to about 5.3GB while keeping enough quality for command review and classification tasks.</p>
+          <pre class="article-code"><code>./build-gcc10/bin/llama-quantize \
+  ../models/Qwen3.5-9B/ggml-model-f16.gguf \
+  ../models/Qwen3.5-9B/ggml-model-Q4_K_M.gguf \
+  Q4_K_M</code></pre>
+        </section>
+
+        <section class="article-section">
+          <h2>Start the local server</h2>
+          <p>Once the model is converted and quantized, start a local llama.cpp server bound to localhost:</p>
+          <pre class="article-code"><code>./llama.cpp/build-gpu-sm86/bin/llama-server \
+  -m ../models/Qwen3.5-9B/ggml-model-Q4_K_M.gguf \
+  --mmproj ../models/Qwen3.5-9B/mmproj-model-f16.gguf \
+  --n-gpu-layers 999 \
+  --host 127.0.0.1 \
+  --port 8080</code></pre>
+          <p>At that point you have a private inference endpoint suitable for shell command analysis, incident triage helpers, runbook automation, or Warden policy experiments.</p>
+        </section>
+
+        <section class="article-section">
+          <h2>Use it for command risk review</h2>
+          <p>A local model can classify commands into categories such as safe, suspicious, destructive, credential-related, network exfiltration, privilege escalation, or production-impacting. The prompt should be short, repeatable, and biased toward concrete operational impact.</p>
+          <pre class="article-code"><code>Analyze this shell command for operational or security risk:
+
+sudo rm -rf /var/lib/docker
+
+Explain:
+- What it does
+- Potential impact
+- Risk level
+- Whether admin approval is recommended</code></pre>
+          <p>In a Warden-style workflow, the result should not be treated as magic authority. It is a risk signal that can be combined with explicit policy, session context, host approval, and audit logs.</p>
+        </section>
+
+        <section class="article-section">
+          <h2>Troubleshooting CUDA mismatch</h2>
+          <p>One validation issue from this setup was a CUDA runtime mismatch:</p>
+          <pre class="article-code"><code>ggml_cuda_init: failed to initialize CUDA:
+CUDA driver version is insufficient for CUDA runtime version</code></pre>
+          <p>This usually means the CUDA runtime used to build llama.cpp is newer than the installed NVIDIA driver supports. The practical fixes are to update the NVIDIA driver, use a CUDA toolkit that matches the installed driver, or rebuild llama.cpp against compatible runtime versions.</p>
+        </section>
+
+        <section class="article-section">
+          <h2>What this enables</h2>
+          <p>A single RTX 3060 desktop is enough to make local AI useful for infrastructure tooling. Combined with Warden, it creates a practical architecture for AI-assisted remote shell access, command auditing, privileged session monitoring, and self-hosted approval workflows.</p>
+          <p>The important design choice is keeping the LLM close to the terminal boundary. Sensitive commands stay local, the host remains in control, and the model helps explain risk before the session crosses into dangerous territory.</p>
+        </section>
+
+        <footer class="article-footer">
+          <p>If your team is exploring AI command review for remote support, start with a local model and a narrow policy loop. Warden gives that loop a practical place to run: inside a controlled terminal session where the host can still approve what happens next.</p>
+          <div class="article-footer-actions">
+            <a class="button button-primary" href="https://forms.gle/9SvjdmgCitrLMA9J7">Get Early Access</a>
+            <a class="button button-secondary" href="./">More Resources</a>
+          </div>
+        </footer>
+      </article>
+    </main>
+  </div>
+</body>
+</html>

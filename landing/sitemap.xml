@@ -6,7 +6,11 @@
   </url>
   <url>
     <loc>https://remotewarden.vercel.app/resources/</loc>
-    <lastmod>2026-05-25</lastmod>
+    <lastmod>2026-05-27</lastmod>
+  </url>
+  <url>
+    <loc>https://remotewarden.vercel.app/resources/local-llm-rtx-3060-warden.html</loc>
+    <lastmod>2026-05-27</lastmod>
   </url>
   <url>
     <loc>https://remotewarden.vercel.app/resources/temporary-ssh-access-alternative.html</loc>

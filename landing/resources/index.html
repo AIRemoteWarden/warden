@@ -6,17 +6,17 @@
   <title>Resources | Warden</title>
   <meta
     name="description"
-    content="Technical resources from Warden about remote terminal support and safer alternatives to temporary SSH access.">
+    content="Technical resources from Warden about remote terminal support, local LLM command review, and safer alternatives to temporary SSH access.">
   <meta name="robots" content="index,follow">
   <link rel="canonical" href="https://remotewarden.vercel.app/resources/">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Resources | Warden">
-  <meta property="og:description" content="Technical resources from Warden about remote terminal support and safer alternatives to temporary SSH access.">
+  <meta property="og:description" content="Technical resources from Warden about remote terminal support, local LLM command review, and safer alternatives to temporary SSH access.">
   <meta property="og:url" content="https://remotewarden.vercel.app/resources/">
   <meta property="og:image" content="https://remotewarden.vercel.app/warden-demo-poster.png">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Resources | Warden">
-  <meta name="twitter:description" content="Technical resources from Warden about remote terminal support and safer alternatives to temporary SSH access.">
+  <meta name="twitter:description" content="Technical resources from Warden about remote terminal support, local LLM command review, and safer alternatives to temporary SSH access.">
   <meta name="twitter:image" content="https://remotewarden.vercel.app/warden-demo-poster.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -32,7 +32,7 @@
           "@type": "CollectionPage",
           "name": "Warden Resources",
           "url": "https://remotewarden.vercel.app/resources/",
-          "description": "Technical resources about remote terminal support, SSH alternatives, and safer debugging workflows."
+          "description": "Technical resources about remote terminal support, SSH alternatives, local LLM command review, and safer debugging workflows."
         },
         {
           "@type": "ItemList",
@@ -40,12 +40,18 @@
             {
               "@type": "ListItem",
               "position": 1,
+              "url": "https://remotewarden.vercel.app/resources/local-llm-rtx-3060-warden.html",
+              "name": "Running a Local LLM on an RTX 3060"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
               "url": "https://remotewarden.vercel.app/resources/debugging-behind-enterprise-firewalls.html",
               "name": "The SRE's Nightmare: Debugging Behind Enterprise Firewalls"
             },
             {
               "@type": "ListItem",
-              "position": 2,
+              "position": 3,
               "url": "https://remotewarden.vercel.app/resources/temporary-ssh-access-alternative.html",
               "name": "Temporary SSH Access Alternative"
             }
@@ -84,6 +90,11 @@
 
       <section class="resource-listing" id="library">
         <div class="resource-list-heading">Articles</div>
+        <article class="resource-article">
+          <h2><a href="local-llm-rtx-3060-warden.html">Running a Local LLM on an RTX 3060</a></h2>
+          <p>How to run a private llama.cpp server on budget NVIDIA hardware and use it as a local risk signal for Warden command review workflows.</p>
+          <a class="resource-article-link" href="local-llm-rtx-3060-warden.html">Read article</a>
+        </article>
         <article class="resource-article">
           <h2><a href="debugging-behind-enterprise-firewalls.html">The SRE's Nightmare: Debugging Behind Enterprise Firewalls</a></h2>
           <p>Why enterprise support incidents turn into access bottlenecks, and how to debug customer systems safely without waiting on inbound firewall changes or insecure shortcuts.</p>

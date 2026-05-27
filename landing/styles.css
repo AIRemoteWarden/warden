@@ -551,6 +551,23 @@ a {
   margin-top: 10px;
 }
 
+.article-section code {
+  font-family: "IBM Plex Mono", monospace;
+}
+
+.article-code {
+  margin: 16px 0 0;
+  padding: 16px;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: rgba(30, 28, 25, 0.92);
+  color: #fffaf1;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.86rem;
+  line-height: 1.65;
+}
+
 .article-callout {
   margin-top: 18px;
   padding: 18px 20px;
