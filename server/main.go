@@ -12,6 +12,7 @@ import (
 	"html/template"
 	"io/fs"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -200,6 +201,12 @@ func (s *Server) handleCreateDemoSession(w http.ResponseWriter, r *http.Request)
 	}
 
 	demoID := randomToken("demo")
+	log.Printf(
+		"demo_session_requested demo_id=%s remote_ip=%s user_agent=%q",
+		demoID,
+		clientIP(r),
+		r.UserAgent(),
+	)
 	pending := s.demos.Create(demoID, time.Now().UTC().Add(s.cfg.DemoSessionTTL))
 
 	cmd, err := s.startDemoCommand(demoID)
@@ -242,6 +249,12 @@ func (s *Server) handleCreateDemoSession(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "demo session unavailable", http.StatusInternalServerError)
 		return
 	}
+	log.Printf(
+		"demo_session_ready demo_id=%s session_id=%s expires_at=%s",
+		demoID,
+		snapshot.SessionID,
+		snapshot.ExpiresAt.UTC().Format(time.RFC3339Nano),
+	)
 
 	go func() {
 		ttl := time.Until(snapshot.ExpiresAt)
@@ -455,6 +468,15 @@ func (s *Server) handleGuestWS(w http.ResponseWriter, r *http.Request) {
 		_ = conn.Close()
 		http.Error(w, err.Error(), http.StatusConflict)
 		return
+	}
+	if session.DemoSessionID != "" {
+		log.Printf(
+			"demo_guest_connected demo_id=%s session_id=%s remote_ip=%s user_agent=%q",
+			session.DemoSessionID,
+			session.ID,
+			clientIP(r),
+			r.UserAgent(),
+		)
 	}
 	defer s.sessions.DetachGuest(session.ID, conn)
 
@@ -843,7 +865,23 @@ func (s *SessionStore) closeSessionLocked(session *Session, reason string) {
 	delete(s.byHostToken, session.HostToken)
 	delete(s.byGuestToken, session.GuestToken)
 	delete(s.byInviteID, session.InviteID)
-	log.Printf("session closed: id=%s reason=%s", session.ID, reason)
+	durationSeconds := int64(time.Since(session.CreatedAt).Round(time.Second) / time.Second)
+	if session.DemoSessionID != "" {
+		log.Printf(
+			"demo_session_closed demo_id=%s session_id=%s reason=%s duration_seconds=%d",
+			session.DemoSessionID,
+			session.ID,
+			reason,
+			durationSeconds,
+		)
+	} else {
+		log.Printf(
+			"session_closed session_id=%s reason=%s duration_seconds=%d",
+			session.ID,
+			reason,
+			durationSeconds,
+		)
+	}
 
 	if session.GuestConn != nil {
 		_ = session.GuestConn.WriteMessage(websocket.TextMessage, []byte(`{"type":"close"}`))
@@ -1022,6 +1060,24 @@ func redactRequestTarget(u *url.URL) string {
 		return u.Path
 	}
 	return u.Path + "?" + encoded
+}
+
+func clientIP(r *http.Request) string {
+	if r == nil {
+		return ""
+	}
+	if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
+		first, _, _ := strings.Cut(forwarded, ",")
+		return strings.TrimSpace(first)
+	}
+	if realIP := r.Header.Get("X-Real-IP"); realIP != "" {
+		return strings.TrimSpace(realIP)
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err == nil {
+		return host
+	}
+	return r.RemoteAddr
 }
 
 func publicHTTPBase(cfg Config) string {
