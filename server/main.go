@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"os/signal"
 	"strconv"
 	"strings"
@@ -38,11 +39,16 @@ type Config struct {
 	SessionIdleTimeout    time.Duration
 	SessionMaxIdleTimeout time.Duration
 	SessionIdleWarning    time.Duration
+	DemoCommand           string
+	DemoHostRelayURL      string
+	DemoStartupTimeout    time.Duration
+	DemoSessionTTL        time.Duration
 }
 
 type Server struct {
 	cfg          Config
 	sessions     *SessionStore
+	demos        *DemoStore
 	upgrader     websocket.Upgrader
 	guestPage    *template.Template
 	staticAssets http.Handler
@@ -56,6 +62,10 @@ func main() {
 		SessionIdleTimeout:    envDurationSecondsAny([]string{"WARDEN_SESSION_IDLE_TIMEOUT_SECONDS", "AIWARDEN_SESSION_IDLE_TIMEOUT_SECONDS", "DEBUGIT_SESSION_IDLE_TIMEOUT_SECONDS"}, 10*time.Minute),
 		SessionMaxIdleTimeout: envDurationSecondsAny([]string{"WARDEN_SESSION_MAX_IDLE_TIMEOUT_SECONDS", "AIWARDEN_SESSION_MAX_IDLE_TIMEOUT_SECONDS", "DEBUGIT_SESSION_MAX_IDLE_TIMEOUT_SECONDS"}, 2*time.Hour),
 		SessionIdleWarning:    envDurationSecondsAny([]string{"WARDEN_SESSION_IDLE_WARNING_SECONDS", "AIWARDEN_SESSION_IDLE_WARNING_SECONDS", "DEBUGIT_SESSION_IDLE_WARNING_SECONDS"}, time.Minute),
+		DemoCommand:           envOrAny([]string{"WARDEN_DEMO_COMMAND"}, ""),
+		DemoHostRelayURL:      envOrAny([]string{"WARDEN_DEMO_HOST_RELAY_URL"}, ""),
+		DemoStartupTimeout:    envDurationSecondsAny([]string{"WARDEN_DEMO_STARTUP_TIMEOUT_SECONDS"}, 20*time.Second),
+		DemoSessionTTL:        envDurationSecondsAny([]string{"WARDEN_DEMO_SESSION_TTL_SECONDS"}, 15*time.Minute),
 	}
 
 	assetFS, err := fs.Sub(webFS, "web/assets")
@@ -71,6 +81,7 @@ func main() {
 	srv := &Server{
 		cfg:       cfg,
 		sessions:  NewSessionStore(),
+		demos:     NewDemoStore(),
 		guestPage: guestPage,
 		staticAssets: http.StripPrefix(
 			"/assets/",
@@ -90,6 +101,7 @@ func main() {
 	controlMux.HandleFunc("/healthz", srv.handleHealthz)
 	controlMux.HandleFunc("/v1/policy/default", srv.handleDefaultPolicy)
 	controlMux.HandleFunc("/v1/sessions", srv.handleCreateSession)
+	controlMux.HandleFunc("/v1/demo-sessions", srv.handleCreateDemoSession)
 	controlMux.HandleFunc("/api/session/", srv.handleSessionInfo)
 	controlMux.HandleFunc("/s/", srv.handleShortSessionPage)
 	controlMux.HandleFunc("/session/", srv.handleSessionPage)
@@ -143,7 +155,25 @@ func (s *Server) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	session := s.sessions.Create(req.Readonly, idleTimeout, idleWarning, s.cfg)
+	if req.DemoSessionID != "" {
+		if err := s.demos.ValidateForSessionCreate(req.DemoSessionID); err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+	}
+
+	session := s.sessions.Create(req.Readonly, idleTimeout, idleWarning, req.DemoSessionID, s.cfg)
+	if req.DemoSessionID != "" {
+		session.HostRelayURL = demoHostRelayURL(s.cfg)
+	}
+	if req.DemoSessionID != "" {
+		if err := s.demos.MarkSessionCreated(req.DemoSessionID, session.ID, session.GuestURL); err != nil {
+			s.sessions.CloseByID(session.ID, "demo_association_failed")
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
+	}
+
 	writeJSON(w, http.StatusOK, CreateSessionResponse{
 		SessionID:          session.ID,
 		HostToken:          session.HostToken,
@@ -152,6 +182,112 @@ func (s *Server) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 		IdleTimeoutSeconds: int64(session.IdleTimeout / time.Second),
 		IdleWarningSeconds: int64(session.IdleWarningBefore / time.Second),
 	})
+}
+
+func (s *Server) handleCreateDemoSession(w http.ResponseWriter, r *http.Request) {
+	setDemoCORSHeaders(w)
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if strings.TrimSpace(s.cfg.DemoCommand) == "" {
+		http.Error(w, "demo sandbox is not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	demoID := randomToken("demo")
+	pending := s.demos.Create(demoID, time.Now().UTC().Add(s.cfg.DemoSessionTTL))
+
+	cmd, err := s.startDemoCommand(demoID)
+	if err != nil {
+		s.cleanupDemoSession(demoID, "demo_start_failed")
+		http.Error(w, "failed to start demo sandbox", http.StatusInternalServerError)
+		return
+	}
+	s.demos.SetCommand(demoID, cmd)
+
+	startupTimeout := s.cfg.DemoStartupTimeout
+	if startupTimeout <= 0 {
+		startupTimeout = 20 * time.Second
+	}
+	select {
+	case <-pending.SessionCreated:
+	case <-time.After(startupTimeout):
+		s.cleanupDemoSession(demoID, "demo_session_create_timeout")
+		writeJSON(w, http.StatusGatewayTimeout, map[string]string{
+			"error":   "session_startup_timeout",
+			"message": "Session startup timed out",
+		})
+		return
+	}
+
+	select {
+	case <-pending.HostConnected:
+	case <-time.After(startupTimeout):
+		s.cleanupDemoSession(demoID, "demo_host_connect_timeout")
+		writeJSON(w, http.StatusGatewayTimeout, map[string]string{
+			"error":   "host_connect_timeout",
+			"message": "Browser terminal failed to connect",
+		})
+		return
+	}
+
+	snapshot, ok := s.demos.Get(demoID)
+	if !ok || snapshot.GuestURL == "" {
+		s.cleanupDemoSession(demoID, "demo_missing_guest_url")
+		http.Error(w, "demo session unavailable", http.StatusInternalServerError)
+		return
+	}
+
+	go func() {
+		ttl := time.Until(snapshot.ExpiresAt)
+		if ttl > 0 {
+			time.Sleep(ttl)
+		}
+		s.cleanupDemoSession(demoID, "demo_ttl_expired")
+	}()
+
+	writeJSON(w, http.StatusOK, DemoSessionResponse{
+		SessionID:        snapshot.SessionID,
+		GuestURL:         snapshot.GuestURL,
+		ExpiresAt:        snapshot.ExpiresAt.UTC().Format(time.RFC3339Nano),
+		ExpiresInSeconds: int64(time.Until(snapshot.ExpiresAt).Round(time.Second) / time.Second),
+	})
+}
+
+func (s *Server) startDemoCommand(demoSessionID string) (*exec.Cmd, error) {
+	commandText := strings.ReplaceAll(s.cfg.DemoCommand, "{demo_session_id}", demoSessionID)
+	cmd := exec.Command("/bin/sh", "-c", commandText)
+	cmd.Env = append(os.Environ(), "WARDEN_DEMO_SESSION_ID="+demoSessionID)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
+	return cmd, nil
+}
+
+func (s *Server) cleanupDemoSession(demoSessionID string, reason string) {
+	pending, ok := s.demos.Remove(demoSessionID)
+	if !ok {
+		return
+	}
+	if pending.SessionID != "" {
+		s.sessions.CloseByID(pending.SessionID, reason)
+	}
+	if pending.Cmd != nil && pending.Cmd.Process != nil {
+		_ = syscall.Kill(-pending.Cmd.Process.Pid, syscall.SIGKILL)
+		_, _ = pending.Cmd.Process.Wait()
+	}
+}
+
+func setDemoCORSHeaders(w http.ResponseWriter) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 }
 
 func (s *Server) handleDefaultPolicy(w http.ResponseWriter, r *http.Request) {
@@ -256,7 +392,16 @@ func (s *Server) handleHostWS(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusConflict)
 		return
 	}
-	defer s.sessions.DetachHost(session.ID, conn)
+	if session.DemoSessionID != "" {
+		s.demos.MarkHostConnected(session.DemoSessionID)
+	}
+	demoSessionID := session.DemoSessionID
+	defer func() {
+		s.sessions.DetachHost(session.ID, conn)
+		if demoSessionID != "" {
+			s.cleanupDemoSession(demoSessionID, "host_disconnected")
+		}
+	}()
 
 	if guest := s.sessions.CurrentGuest(session.ID); guest != nil {
 		_ = writeWSJSON(conn, RelayJoined{})
@@ -361,6 +506,23 @@ type SessionStore struct {
 	byInviteID   map[string]*Session
 }
 
+type DemoStore struct {
+	mu   sync.RWMutex
+	byID map[string]*PendingDemoSession
+}
+
+type PendingDemoSession struct {
+	DemoSessionID   string
+	SessionID       string
+	GuestURL        string
+	ExpiresAt       time.Time
+	Cmd             *exec.Cmd
+	SessionCreated  chan struct{}
+	HostConnected   chan struct{}
+	sessionSignaled bool
+	hostSignaled    bool
+}
+
 func NewSessionStore() *SessionStore {
 	return &SessionStore{
 		byID:         make(map[string]*Session),
@@ -370,7 +532,99 @@ func NewSessionStore() *SessionStore {
 	}
 }
 
-func (s *SessionStore) Create(readonly bool, idleTimeout time.Duration, idleWarning time.Duration, cfg Config) *Session {
+func NewDemoStore() *DemoStore {
+	return &DemoStore{byID: make(map[string]*PendingDemoSession)}
+}
+
+func (s *DemoStore) Create(id string, expiresAt time.Time) *PendingDemoSession {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	pending := &PendingDemoSession{
+		DemoSessionID:  id,
+		ExpiresAt:      expiresAt,
+		SessionCreated: make(chan struct{}),
+		HostConnected:  make(chan struct{}),
+	}
+	s.byID[id] = pending
+	return pending
+}
+
+func (s *DemoStore) Get(id string) (*PendingDemoSession, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	pending, ok := s.byID[id]
+	if !ok {
+		return nil, false
+	}
+	copy := *pending
+	return &copy, true
+}
+
+func (s *DemoStore) SetCommand(id string, cmd *exec.Cmd) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if pending, ok := s.byID[id]; ok {
+		pending.Cmd = cmd
+	}
+}
+
+func (s *DemoStore) Remove(id string) (*PendingDemoSession, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	pending, ok := s.byID[id]
+	if ok {
+		delete(s.byID, id)
+	}
+	return pending, ok
+}
+
+func (s *DemoStore) ValidateForSessionCreate(id string) error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	pending, ok := s.byID[id]
+	if !ok {
+		return fmt.Errorf("invalid demo_session_id")
+	}
+	if pending.SessionID != "" {
+		return fmt.Errorf("demo_session_id already used")
+	}
+	if time.Now().UTC().After(pending.ExpiresAt) {
+		return fmt.Errorf("demo_session_id expired")
+	}
+	return nil
+}
+
+func (s *DemoStore) MarkSessionCreated(id string, sessionID string, guestURL string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	pending, ok := s.byID[id]
+	if !ok {
+		return fmt.Errorf("unknown demo_session_id")
+	}
+	if pending.SessionID != "" {
+		return fmt.Errorf("demo_session_id already used")
+	}
+	pending.SessionID = sessionID
+	pending.GuestURL = guestURL
+	if !pending.sessionSignaled {
+		close(pending.SessionCreated)
+		pending.sessionSignaled = true
+	}
+	return nil
+}
+
+func (s *DemoStore) MarkHostConnected(id string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	pending, ok := s.byID[id]
+	if !ok || pending.hostSignaled {
+		return
+	}
+	close(pending.HostConnected)
+	pending.hostSignaled = true
+}
+
+func (s *SessionStore) Create(readonly bool, idleTimeout time.Duration, idleWarning time.Duration, demoSessionID string, cfg Config) *Session {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -380,16 +634,17 @@ func (s *SessionStore) Create(readonly bool, idleTimeout time.Duration, idleWarn
 	guestToken := randomToken("guest")
 	inviteID := randomInviteID(10)
 	session := &Session{
-		ID:             id,
-		HostToken:      hostToken,
-		GuestToken:     guestToken,
-		InviteID:       inviteID,
-		Readonly:       readonly,
-		GuestURL:       fmt.Sprintf("%s/s/%s", publicHTTPBase(cfg), inviteID),
-		HostRelayURL:   fmt.Sprintf("%s/ws/host", publicWSBase(cfg)),
-		CreatedAt:      now,
-		LastActivityAt: now,
-		IdleTimeout:    idleTimeout,
+		ID:                id,
+		HostToken:         hostToken,
+		GuestToken:        guestToken,
+		InviteID:          inviteID,
+		DemoSessionID:     demoSessionID,
+		Readonly:          readonly,
+		GuestURL:          fmt.Sprintf("%s/s/%s", publicHTTPBase(cfg), inviteID),
+		HostRelayURL:      fmt.Sprintf("%s/ws/host", publicWSBase(cfg)),
+		CreatedAt:         now,
+		LastActivityAt:    now,
+		IdleTimeout:       idleTimeout,
 		IdleWarningBefore: idleWarning,
 	}
 
@@ -398,6 +653,14 @@ func (s *SessionStore) Create(readonly bool, idleTimeout time.Duration, idleWarn
 	s.byGuestToken[guestToken] = session
 	s.byInviteID[inviteID] = session
 	return session
+}
+
+func (s *SessionStore) CloseByID(id string, reason string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if session, ok := s.byID[id]; ok {
+		s.closeSessionLocked(session, reason)
+	}
 }
 
 func (s *SessionStore) GetByID(id string) (*Session, bool) {
@@ -595,26 +858,28 @@ func (s *SessionStore) closeSessionLocked(session *Session, reason string) {
 }
 
 type Session struct {
-	ID             string
-	HostToken      string
-	GuestToken     string
-	InviteID       string
-	Readonly       bool
-	GuestURL       string
-	HostRelayURL   string
-	CreatedAt      time.Time
-	LastActivityAt time.Time
-	IdleTimeout    time.Duration
+	ID                string
+	HostToken         string
+	GuestToken        string
+	InviteID          string
+	DemoSessionID     string
+	Readonly          bool
+	GuestURL          string
+	HostRelayURL      string
+	CreatedAt         time.Time
+	LastActivityAt    time.Time
+	IdleTimeout       time.Duration
 	IdleWarningBefore time.Duration
 	IdleWarningSent   bool
-	HostConn       *websocket.Conn
-	GuestConn      *websocket.Conn
+	HostConn          *websocket.Conn
+	GuestConn         *websocket.Conn
 }
 
 type CreateSessionRequest struct {
 	Readonly           bool   `json:"readonly"`
 	IdleTimeoutSeconds *int64 `json:"idle_timeout_seconds,omitempty"`
 	IdleWarningSeconds *int64 `json:"idle_warning_seconds,omitempty"`
+	DemoSessionID      string `json:"demo_session_id,omitempty"`
 }
 
 type CreateSessionResponse struct {
@@ -624,6 +889,13 @@ type CreateSessionResponse struct {
 	RelayURL           string `json:"relay_url"`
 	IdleTimeoutSeconds int64  `json:"idle_timeout_seconds"`
 	IdleWarningSeconds int64  `json:"idle_warning_seconds"`
+}
+
+type DemoSessionResponse struct {
+	SessionID        string `json:"session_id"`
+	GuestURL         string `json:"guest_url"`
+	ExpiresAt        string `json:"expires_at"`
+	ExpiresInSeconds int64  `json:"expires_in_seconds"`
 }
 
 type MessageEnvelope struct {
@@ -778,6 +1050,24 @@ func publicWSBase(cfg Config) string {
 		return "ws://" + host
 	}
 	return "ws://" + host + normalizeControlAddr(cfg.ControlAddr)
+}
+
+func demoHostRelayURL(cfg Config) string {
+	if cfg.DemoHostRelayURL != "" {
+		return cfg.DemoHostRelayURL
+	}
+
+	addr := normalizeControlAddr(cfg.ControlAddr)
+	if strings.HasPrefix(addr, ":") {
+		return "ws://127.0.0.1" + addr + "/ws/host"
+	}
+	if strings.HasPrefix(addr, "0.0.0.0:") {
+		return "ws://127.0.0.1:" + strings.TrimPrefix(addr, "0.0.0.0:") + "/ws/host"
+	}
+	if strings.HasPrefix(addr, "[::]:") {
+		return "ws://127.0.0.1:" + strings.TrimPrefix(addr, "[::]:") + "/ws/host"
+	}
+	return "ws://" + addr + "/ws/host"
 }
 
 func (s *Server) loadDefaultPolicy() ([]byte, error) {

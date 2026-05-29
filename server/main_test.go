@@ -94,7 +94,7 @@ func TestProcessIdleTimeoutsRemovesExpiredSession(t *testing.T) {
 		PublicHost:  "localhost",
 	}
 	store := NewSessionStore()
-	session := store.Create(false, 10*time.Second, 0, cfg)
+	session := store.Create(false, 10*time.Second, 0, "", cfg)
 	session.LastActivityAt = time.Now().UTC().Add(-11 * time.Second)
 
 	store.ProcessIdleTimeouts(time.Now().UTC())
@@ -110,7 +110,7 @@ func TestProcessIdleTimeoutsKeepsActiveSession(t *testing.T) {
 		PublicHost:  "localhost",
 	}
 	store := NewSessionStore()
-	session := store.Create(false, 10*time.Second, 0, cfg)
+	session := store.Create(false, 10*time.Second, 0, "", cfg)
 	session.LastActivityAt = time.Now().UTC().Add(-5 * time.Second)
 
 	store.ProcessIdleTimeouts(time.Now().UTC())
@@ -126,7 +126,7 @@ func TestProcessIdleTimeoutsMarksWarningSentBeforeExpiry(t *testing.T) {
 		PublicHost:  "localhost",
 	}
 	store := NewSessionStore()
-	session := store.Create(false, 10*time.Second, 3*time.Second, cfg)
+	session := store.Create(false, 10*time.Second, 3*time.Second, "", cfg)
 	session.LastActivityAt = time.Now().UTC().Add(-8 * time.Second)
 
 	store.ProcessIdleTimeouts(time.Now().UTC())

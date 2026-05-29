@@ -11,6 +11,8 @@ struct CreateSessionRequest {
     idle_timeout_seconds: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     idle_warning_seconds: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    demo_session_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -34,6 +36,7 @@ pub async fn create_session(
             readonly: config.options.readonly,
             idle_timeout_seconds: config.options.idle_timeout_seconds,
             idle_warning_seconds: config.options.idle_warning_seconds,
+            demo_session_id: config.options.demo_session_id.clone(),
         })
         .send()
         .await

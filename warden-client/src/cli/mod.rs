@@ -46,6 +46,7 @@ impl CliBootstrap {
         while let Some(arg) = args.next() {
             match arg.as_str() {
                 "start" => {}
+                "demo-host" => parsed.demo_host = true,
                 "--readonly" => parsed.readonly = true,
                 "--idle-timeout" => {
                     let raw = args.next().ok_or(AppError::InvalidArguments(
@@ -100,6 +101,10 @@ impl CliBootstrap {
                     )))
                 }
             }
+        }
+
+        if parsed.demo_session_id.is_none() {
+            parsed.demo_session_id = std::env::var("WARDEN_DEMO_SESSION_ID").ok();
         }
 
         Ok(parsed)

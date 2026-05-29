@@ -14,6 +14,8 @@ pub struct ClientOptions {
     pub server: Option<String>,
     pub llm: Option<String>,
     pub insecure: bool,
+    pub demo_host: bool,
+    pub demo_session_id: Option<String>,
 }
 
 #[derive(Debug, Clone)]

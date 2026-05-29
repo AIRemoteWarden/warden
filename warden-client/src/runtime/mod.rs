@@ -84,7 +84,9 @@ impl AppRuntime {
         self.session.readonly = self.config.options.readonly;
 
         self.ui.show_session_started(&self.session.guest_url);
-        self.platform.enter_raw_mode()?;
+        if !self.config.options.demo_host {
+            self.platform.enter_raw_mode()?;
+        }
         self.terminal
             .start(shell_spec, cwd, env, size, &hook_commands)?;
         self.transport.connect_relay(&self.session).await?;
@@ -107,14 +109,25 @@ impl AppRuntime {
             }
         };
 
-        tokio::select! {
-            event = ai_event => {
-                self.ai_assessment_rx = None;
-                Ok(event)
-            },
-            event = self.platform.next_event() => Ok(event.into()),
-            event = self.terminal.next_event() => Ok(event.into()),
-            event = self.transport.next_event() => Ok(event.into()),
+        if self.config.options.demo_host {
+            tokio::select! {
+                event = ai_event => {
+                    self.ai_assessment_rx = None;
+                    Ok(event)
+                },
+                event = self.terminal.next_event() => Ok(event.into()),
+                event = self.transport.next_event() => Ok(event.into()),
+            }
+        } else {
+            tokio::select! {
+                event = ai_event => {
+                    self.ai_assessment_rx = None;
+                    Ok(event)
+                },
+                event = self.platform.next_event() => Ok(event.into()),
+                event = self.terminal.next_event() => Ok(event.into()),
+                event = self.transport.next_event() => Ok(event.into()),
+            }
         }
     }
 
@@ -288,6 +301,22 @@ impl AppRuntime {
                 self.transport.send_guest_feedback("command denied").await
             }
             PolicyDecision::RequireApproval { reason, risk } => {
+                if self.config.options.demo_host {
+                    self.transport
+                        .send_approval_state(&PolicyDecision::RequireApproval {
+                            reason,
+                            risk,
+                        })
+                        .await?;
+                    self.terminal.resolve_pending_command(PolicyDecision::Deny {
+                        reason: "blocked by demo policy".to_string(),
+                    })?;
+                    return self
+                        .transport
+                        .send_guest_feedback("command blocked by demo policy")
+                        .await;
+                }
+
                 let redaction_plan = self.policy.redaction_plan_for(&command);
                 self.session.approval_pending = true;
                 self.session.pending_approval = Some(PendingApproval {
