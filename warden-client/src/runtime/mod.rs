@@ -302,12 +302,24 @@ impl AppRuntime {
             }
             PolicyDecision::RequireApproval { reason, risk } => {
                 if self.config.options.demo_host {
+                    let redaction_plan = self.policy.redaction_plan_for(&command);
                     self.transport
                         .send_approval_state(&PolicyDecision::RequireApproval {
                             reason,
                             risk,
                         })
                         .await?;
+
+                    if let Some(plan) = redaction_plan {
+                        self.terminal.resolve_pending_command(PolicyDecision::Allow)?;
+                        self.transport.send_approval_state(&PolicyDecision::Allow).await?;
+                        self.session.active_redaction = Some(ActiveRedaction::new(plan));
+                        return self
+                            .transport
+                            .send_guest_feedback("command approved with redacted output")
+                            .await;
+                    }
+
                     self.terminal.resolve_pending_command(PolicyDecision::Deny {
                         reason: "blocked by demo policy".to_string(),
                     })?;
